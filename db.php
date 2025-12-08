@@ -1,3 +1,4 @@
+<?php
 // Database Configuration
 // Updated to use port 8445 (from your Python sample)
 // CRITICAL: Standard MySQL is port 3306. The sample usage of 8445 usually implies Trino/Presto over HTTPs.

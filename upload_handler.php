@@ -2,7 +2,7 @@
 require_once 'db.php';
 
 // Configuration
-$tableName = 'ufaa_23203159'; 
+$tableName = 'iceberg.adhoc.ufaa_23203159'; // Updated to full qualified name based on your DBeaver queries
 $batchSize = 1000; // Rows per transaction
 
 $message = "";

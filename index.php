@@ -63,7 +63,7 @@ $error = '';
                     $page = $_GET['page'] ?? 1;
                     $perPage = 50;
                     $offset = ($page - 1) * $perPage;
-                    $tableName = 'ufaa_23203159';
+                    $tableName = 'iceberg.adhoc.ufaa_23203159'; // Updated to full qualified name
 
                     try {
                         // 1. Get Columns (Metadata)

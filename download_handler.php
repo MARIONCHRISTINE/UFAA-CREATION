@@ -1,7 +1,7 @@
 <?php
 require_once 'db.php';
 
-$tableName = 'ufaa_23203159';
+$tableName = 'iceberg.adhoc.ufaa_23203159'; // Updated to full qualified name
 
 try {
     // 1. Fetch all data (streaming to avoid memory issues)
