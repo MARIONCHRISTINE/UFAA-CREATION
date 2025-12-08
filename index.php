@@ -71,17 +71,24 @@ $error = '';
                         $stmt = $pdo->query("SELECT * FROM $tableName LIMIT 1");
                         $firstRow = $stmt->fetch(PDO::FETCH_ASSOC);
                         
-                        // 2. Count Total
-                        $countStmt = $pdo->query("SELECT COUNT(*) FROM $tableName");
-                        $totalRows = $countStmt->fetchColumn();
-                        $totalPages = ceil($totalRows / $perPage);
+                        // 2. Optimized Pagination (No Count)
+                        // Fetch 1 extra row to check if there is a "Next" page
+                        $fetchLimit = $perPage + 1;
 
-                        // 3. Fetch Page Data
                         $dataStmt = $pdo->prepare("SELECT * FROM $tableName LIMIT :limit OFFSET :offset");
-                        $dataStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+                        $dataStmt->bindValue(':limit', $fetchLimit, PDO::PARAM_INT);
                         $dataStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                         $dataStmt->execute();
                         $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                        // If we got more rows than perPage, we have a next page
+                        $hasNextPage = false;
+                        if (count($rows) > $perPage) {
+                            $hasNextPage = true;
+                            array_pop($rows); // Remove the extra row from display
+                        }
+                        
+                        $totalRows = "Many (Count Hidden)"; // Placeholder
 
                     } catch (Exception $e) {
                         $error = "Database Error: " . $e->getMessage();
@@ -93,7 +100,7 @@ $error = '';
                 <h2 style="margin-bottom: 1rem;">Data Viewer</h2>
                 <div class="flex-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <p style="color: var(--text-muted);">
-                        Total Records: <strong><?php echo number_format($totalRows ?? 0); ?></strong>
+                        Showing page <?php echo $page; ?>
                     </p>
                     <a href="download_handler.php" class="btn btn-secondary">Download All CSV</a>
                 </div>
@@ -144,22 +151,20 @@ $error = '';
                     <?php endif; ?>
                 </div>
 
-                <!-- Pagination -->
-                <?php if (isset($totalPages) && $totalPages > 1): ?>
+                <!-- Simple Pagination -->
                 <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: center;">
                     <?php if ($page > 1): ?>
                         <a href="?view=view_data&page=<?php echo $page - 1; ?>" class="btn btn-secondary" style="padding: 0.5rem 1rem;">&laquo; Previous</a>
                     <?php endif; ?>
                     
                     <span style="display:flex; align-items:center; color: var(--text-muted);">
-                        Page <?php echo $page; ?> of <?php echo $totalPages; ?>
+                        Page <?php echo $page; ?>
                     </span>
 
-                    <?php if ($page < $totalPages): ?>
+                    <?php if (isset($hasNextPage) && $hasNextPage): ?>
                         <a href="?view=view_data&page=<?php echo $page + 1; ?>" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Next &raquo;</a>
                     <?php endif; ?>
                 </div>
-                <?php endif; ?>
             
             <?php endif; ?> <!-- End of view_data elseif -->
         </div>
