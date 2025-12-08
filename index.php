@@ -59,53 +59,97 @@ $error = '';
             <?php elseif ($view === 'view_data'): ?>
                 
                 <?php
-                    // Fetch Data Logic
+                    // Fetch Data Logic with FILTERS
                     $page = $_GET['page'] ?? 1;
-                    $perPage = 50;
-                    $offset = ($page - 1) * $perPage;
-                    $tableName = 'iceberg.adhoc.ufaa_23203159'; // Updated to full qualified name
+                    $fetchLimit = 100;
+                    $tableName = 'iceberg.adhoc.ufaa_23203159';
+
+                    // Capture Filter Inputs
+                    $filterName = $_GET['filter_name'] ?? '';
+                    $filterDate = $_GET['filter_date'] ?? '';
 
                     try {
-                        // 1. Get Columns (Metadata)
-                        // We query 1 row to get keys if we don't assume hardcoded schema
-                        $stmt = $pdo->query("SELECT * FROM $tableName LIMIT 1");
-                        $firstRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                        
-                        // 2. Optimized Pagination (No Count, No OFFSET if Trino < 341)
-                        // Note: User reported "mismatched input OFFSET". 
-                        // This means the Trino version is likely old or configured to not support standard SQL OFFSET.
-                        // We will just fetch the first 100 rows for now and handle "next" via visual cue only.
-                        
-                        $fetchLimit = 100;
+                        // Build Query Dynamically
+                        $sql = "SELECT * FROM $tableName WHERE 1=1";
+                        $params = [];
 
-                        // We just select TOP N. 
-                        // "Pagination" in old Trino usually requires WHERE id > last_id, but we don't know the ID column perfectly.
-                        // Simplest fix: Just Select Limit 100.
-                        $dataStmt = $pdo->prepare("SELECT * FROM $tableName LIMIT :limit");
-                        $dataStmt->bindValue(':limit', $fetchLimit, PDO::PARAM_INT);
-                        // $dataStmt->bindValue(':offset', $offset, PDO::PARAM_INT); // REMOVED OFFSET causing crasg
+                        // 1. Name Filter (Case Insensitive Partial Match)
+                        if (!empty($filterName)) {
+                            // Note: Trino usually requires LOWER() for case insensitivity
+                            // Using standard SQL standard for pattern
+                            $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
+                            $params[':name'] = '%' . strtolower($filterName) . '%';
+                        }
+
+                        // 2. Date Filter (Exact Match)
+                        if (!empty($filterDate)) {
+                            $sql .= " AND \"transaction_date\" = :date";
+                            $params[':date'] = $filterDate; // Assuming YYYY-MM-DD input matches DB format
+                        }
+
+                        // Add Ordering (Optional, but good for UX)
+                        // $sql .= " ORDER BY some_date DESC"; // Only if we are sure of column
+
+                        // Add Limit
+                        $sql .= " LIMIT :limit";
+                        $params[':limit'] = $fetchLimit;
+
+                        $dataStmt = $pdo->prepare($sql);
+                        
+                        // Bind all params
+                        foreach ($params as $key => $val) {
+                            $dataStmt->bindValue($key, $val);
+                        }
+                        
                         $dataStmt->execute();
                         $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                        // Simulate local pagination if needed, or just show top 100
-                        // For simplicity in this fix, we show what we fetched.
-                        $hasNextPage = false; 
-                        
-                        $totalRows = "100+ (Offset Not Supported)"; 
+                        // If rows exist, we get header metadata from keys
+                        $totalRows = count($rows) . (count($rows) >= $fetchLimit ? "+" : "");
 
                     } catch (Exception $e) {
                         $error = "Database Error: " . $e->getMessage();
                         $rows = [];
-                        $firstRow = false; // Flag to hide table
                     }
                 ?>
 
                 <h2 style="margin-bottom: 1rem;">Data Viewer</h2>
+                
+                <!-- Search & Actions Bar -->
+                <div class="glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <form method="GET" action="index.php" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                        <input type="hidden" name="view" value="view_data">
+                        
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                            <label class="form-label">Owner Name</label>
+                            <input type="text" name="filter_name" class="form-control" placeholder="Search by name..." value="<?php echo htmlspecialchars($filterName); ?>">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
+                            <label class="form-label">Transaction Date</label>
+                            <input type="date" name="filter_date" class="form-control" value="<?php echo htmlspecialchars($filterDate); ?>">
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="submit" class="btn btn-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.5rem"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                Filter
+                            </button>
+                            <a href="index.php?view=view_data" class="btn btn-secondary">Reset</a>
+                        </div>
+                    </form>
+                </div>
+
                 <div class="flex-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <p style="color: var(--text-muted);">
-                        Showing page <?php echo $page; ?>
+                        Showing: <strong><?php echo $totalRows; ?></strong> result(s)
                     </p>
-                    <a href="download_handler.php" class="btn btn-secondary">Download All CSV</a>
+                    
+                    <!-- Download Button now passes current filters -->
+                    <a href="download_handler.php?filter_name=<?php echo urlencode($filterName); ?>&filter_date=<?php echo urlencode($filterDate); ?>" class="btn btn-secondary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.5rem"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Download Results
+                    </a>
                 </div>
                 
                 <?php if (!empty($message)): ?>

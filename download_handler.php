@@ -4,9 +4,36 @@ require_once 'db.php';
 $tableName = 'iceberg.adhoc.ufaa_23203159'; // Updated to full qualified name
 
 try {
-    // 1. Fetch all data (streaming to avoid memory issues)
-    // For HUGE datasets, we should stream to output directly.
-    $stmt = $pdo->query("SELECT * FROM $tableName");
+    // 1. Fetch filtered data (streaming)
+    $sql = "SELECT * FROM $tableName WHERE 1=1";
+    $params = [];
+
+    // Capture Filter Inputs
+    $filterName = $_GET['filter_name'] ?? '';
+    $filterDate = $_GET['filter_date'] ?? '';
+
+    // Apply Name Filter
+    if (!empty($filterName)) {
+        $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
+        $params[':name'] = '%' . strtolower($filterName) . '%';
+    }
+
+    // Apply Date Filter
+    if (!empty($filterDate)) {
+        $sql .= " AND \"transaction_date\" = :date";
+        $params[':date'] = $filterDate;
+    }
+
+    // Note for Bulk Download: No LIMIT here. We want ALL matching rows.
+    
+    $stmt = $pdo->prepare($sql);
+    
+    // Bind
+    foreach ($params as $key => $val) {
+        $stmt->bindValue($key, $val);
+    }
+    
+    $stmt->execute();
     
     // 2. Set Headers for Download
     header('Content-Type: text/csv');
