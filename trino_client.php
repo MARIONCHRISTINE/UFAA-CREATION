@@ -10,6 +10,7 @@ class TrinoClient {
     private $catalog;
     private $schema;
     private $sslCert;
+    private $inTransaction = false;
 
     public function __construct($host, $port, $user, $pass, $catalog, $schema, $sslCert = null) {
         $this->host = $host;
@@ -22,7 +23,13 @@ class TrinoClient {
     }
 
     public function query($sql) {
-        // Trino API Endpoint for Statement Execution
+        // Simple internal query exec
+        return $this->execRaw($sql);
+    }
+
+    // Main execution logic
+    private function execRaw($sql) {
+        // Trino API Endpoint
         $url = "https://{$this->host}:{$this->port}/v1/statement";
         
         $headers = [
@@ -32,17 +39,16 @@ class TrinoClient {
             "Content-Type: text/plain"
         ];
 
-        // Basic Auth
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $sql);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Bypass Check for verify (simplification for "Simple App")
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0); 
         curl_setopt($ch, CURLOPT_USERPWD, "{$this->user}:{$this->pass}");
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30); // 30s timeout
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120); // Increased timeout for heavy queries
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -54,11 +60,12 @@ class TrinoClient {
         }
 
         if ($httpCode !== 200) {
-            throw new Exception("Trino API Error ($httpCode): $response");
+            // Try to extract error from JSON if possible
+            $json = json_decode($response, true);
+            $msg = $json['error']['message'] ?? $response;
+            throw new Exception("Trino API Error ($httpCode): $msg");
         }
 
-        // Response is JSON with "nextUri" for paging results.
-        // We need to loop to get all data.
         return $this->fetchAllResults(json_decode($response, true));
     }
 
@@ -78,16 +85,19 @@ class TrinoClient {
 
             if (isset($currentResponse['data'])) {
                 foreach ($currentResponse['data'] as $row) {
-                    // Combine keys with values
-                    $data[] = array_combine($columns, $row);
+                     // Combine keys with values if columns are known
+                    if (!empty($columns)) {
+                         $data[] = array_combine($columns, $row);
+                    } else {
+                         return new TrinoStatement([]); // Error state?
+                    }
                 }
             }
 
-            // Check if there is a next page
             if (isset($currentResponse['nextUri'])) {
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $currentResponse['nextUri']);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, ["X-Trino-User: {$this->user}"]); // Minimal auth as URI contains token usually
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ["X-Trino-User: {$this->user}"]);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
@@ -96,32 +106,34 @@ class TrinoClient {
                 curl_close($ch);
                 $currentResponse = json_decode($res, true);
             } else {
-                break; // Job done
+                break;
             }
             
-            // Safety break for infinite loops or massive data without pagination handling at app level
             if (isset($currentResponse['error'])) {
                  throw new Exception("Trino Query Error: " . $currentResponse['error']['message']);
             }
         }
 
-        // Return a Pseudo-Statement object
         return new TrinoStatement($data);
     }
     
-    // Helper to mimic PDO prepare() -> execute()
-    // Trino REST API doesn't support Prepared Statements in the same way, 
-    // so we just return self and handle execute manually if possible, or simple query.
-    // For this simple app, we will assume direct queries for now or do client-side interpolation (Risk: Injection, but Internal App).
     public function prepare($sql) {
         return new TrinoStatement([], $this, $sql);
     }
+    
+    // Transaction Stubs (Trino doesn't support interactive transactions over REST the same way, usually auto-commit)
+    public function beginTransaction() { $this->inTransaction = true; return true; }
+    public function commit() { $this->inTransaction = false; return true; }
+    public function rollBack() { $this->inTransaction = false; return true; }
+    public function inTransaction() { return $this->inTransaction; }
 }
 
 class TrinoStatement {
     private $data;
     private $client;
     private $pendingSql;
+    private $boundParams = [];
+    private $iterator = 0;
 
     public function __construct($data, $client = null, $pendingSql = null) {
         $this->data = $data;
@@ -129,37 +141,108 @@ class TrinoStatement {
         $this->pendingSql = $pendingSql;
     }
 
+    // Compatibility: bindValue
+    public function bindValue($param, $value, $type = null) {
+        $this->boundParams[$param] = ['value' => $value, 'type' => $type];
+        return true;
+    }
+
+    public function execute($params = []) {
+        if ($this->client && $this->pendingSql) {
+            $sql = $this->pendingSql;
+            
+            // Merge direct params with bound params
+            // boundParams structure: key => ['value'=>..., 'type'=>...]
+            // params structure: key => value (or indexed)
+            
+            $finalParams = [];
+            
+            // 1. Add bound params
+            foreach ($this->boundParams as $k => $v) {
+                $finalParams[$k] = $v;
+            }
+            
+            // 2. Add execute params (override if conflict)
+            foreach ($params as $k => $v) {
+                $finalParams[$k] = ['value' => $v, 'type' => null];
+            }
+
+            // Replace logic
+            // Check if we are doing Named (:id) or Indexed (?) replacement
+            
+            // HEURISTIC: Does SQL contain '?' ?
+            if (strpos($sql, '?') !== false) {
+                 // Indexed replacement
+                 // NOTE: Array keys in $finalParams might be 0,1,2 OR ':name'. 
+                 // If using ?, we expect 0,1,2.
+                 // We limit to simple sequential logic
+                 
+                 // Sort by key to ensure order if mixed? Just take values in order is safer for ?
+                 $values = array_column($finalParams, 'value');
+                 
+                 foreach ($values as $val) {
+                     // Check if empty string or number
+                     $replacement = $this->quote($val);
+                     // Replace FIRST occurrence of ?
+                     $pos = strpos($sql, '?');
+                     if ($pos !== false) {
+                         $sql = substr_replace($sql, $replacement, $pos, 1);
+                     }
+                 }
+                 
+            } else {
+                // Named replacement
+                foreach ($finalParams as $key => $info) {
+                    $val = $info['value'];
+                    $type = $info['type'];
+                    
+                    // Determine if quoting is needed
+                    $replacement = $this->quote($val, $type);
+                    
+                    if (is_string($key)) {
+                        // Ensure key has colon
+                        $search = (strpos($key, ':') === 0) ? $key : ":$key";
+                        $sql = str_replace($search, $replacement, $sql);
+                    }
+                }
+            }
+
+            // Execute real query
+            $resultStmt = $this->client->query($sql);
+            $this->data = $resultStmt->fetchAll(); // Copy data from result statement to this statement
+            $this->iterator = 0;
+        }
+        return true;
+    }
+
+    private function quote($val, $type = null) {
+        if ($val === null) return 'NULL';
+        
+        // If type is explicitly INT, or looks like INT, return as is (Trino is strict)
+        // PDO::PARAM_INT is 1
+        if ($type === 1 || is_int($val) || (is_numeric($val) && (int)$val == $val)) {
+            return (int)$val;
+        }
+        
+        // String
+        return "'" . addslashes($val) . "'";
+    }
+
     public function fetchAll($mode = null) {
         return $this->data;
     }
 
     public function fetch($mode = null) {
-        $row = current($this->data);
-        next($this->data);
+        if (!isset($this->data[$this->iterator])) return false;
+        $row = $this->data[$this->iterator];
+        $this->iterator++;
         return $row;
     }
     
     public function fetchColumn() {
-        if (empty($this->data)) return 0;
-        return reset($this->data[0]);
-    }
-
-    // Since Trino is not PDO, we implement a fake execute for the "View Data" page
-    public function execute($params = []) {
-        if ($this->client && $this->pendingSql) {
-            // Simple string replacement for binding (Very basic, treat with caution)
-            $sql = $this->pendingSql;
-            foreach ($params as $key => $val) {
-                // If named param
-                 if (is_string($key)) {
-                    $sql = str_replace($key, "'" . addslashes($val) . "'", $sql);
-                 }
-            }
-            // Execute real query now
-            $resultStmt = $this->client->query($sql);
-            $this->data = $resultStmt->fetchAll();
-        }
-        return true;
+        $row = $this->fetch();
+        if (!$row) return false;
+        return reset($row);
     }
     
     public function rowCount() {
