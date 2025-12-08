@@ -1,13 +1,13 @@
-<?php
 // Database Configuration
-// Updated based on user feedback to prioritize User: 23203159
-// NOTE: If your database is on a remote server (like 172.23.56.100), change 'localhost' to that IP.
+// Updated to use port 8445 (from your Python sample)
+// CRITICAL: Standard MySQL is port 3306. The sample usage of 8445 usually implies Trino/Presto over HTTPs.
+// If this fails, please check the 'Port' field in your DBeaver connection settings.
 
-$host = 'localhost'; // <--- CHANGE THIS to the IP address if your DB is not on your laptop
-$port = '3306';      // Default MySQL port
-$db   = 'adhoc';     // Assumption based on "iceberg.adhoc..."
-$user = '23203159';  // Confirmed User
-$pass = 'Ordinary@1234'; // Confirmed Pass
+$host = '172.23.56.100'; 
+$port = '8445';        // Changed from 3306 to 8445 based on your sample
+$db   = 'adhoc';       // Schema name
+$user = '23203159';    
+$pass = 'Ordinary@1234'; 
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
@@ -15,6 +15,7 @@ $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
+    PDO::ATTR_TIMEOUT            => 5,
 ];
 
 try {
