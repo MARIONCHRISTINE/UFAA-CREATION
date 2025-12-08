@@ -9,19 +9,45 @@ try {
     $params = [];
 
     // Capture Filter Inputs
-    $filterName = $_GET['filter_name'] ?? '';
-    $filterDate = $_GET['filter_date'] ?? '';
+    $f_name = $_GET['f_name'] ?? '';
+    $f_id   = $_GET['f_id'] ?? '';
+    $f_dob  = $_GET['f_dob'] ?? '';
+    $f_amount = $_GET['f_amount'] ?? '';
+    $f_date_start = $_GET['f_date_start'] ?? '';
+    $f_date_end   = $_GET['f_date_end'] ?? '';
 
-    // Apply Name Filter
-    if (!empty($filterName)) {
+    // 1. Owner Name
+    if (!empty($f_name)) {
         $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
-        $params[':name'] = '%' . strtolower($filterName) . '%';
+        $params[':name'] = '%' . strtolower($f_name) . '%';
+    }
+    
+    // 2. Owner ID
+    if (!empty($f_id)) {
+            $sql .= " AND \"owner_id\" LIKE :id";
+            $params[':id'] = '%' . $f_id . '%';
     }
 
-    // Apply Date Filter
-    if (!empty($filterDate)) {
-        $sql .= " AND \"transaction_date\" = :date";
-        $params[':date'] = $filterDate;
+    // 3. DOB
+    if (!empty($f_dob)) {
+        $sql .= " AND \"owner_dob\" = :dob";
+        $params[':dob'] = $f_dob;
+    }
+
+    // 4. Amount
+    if (!empty($f_amount)) {
+        $sql .= " AND \"owner_due_amount\" = :amount";
+        $params[':amount'] = $f_amount;
+    }
+
+    // 5. Transaction Date Range
+    if (!empty($f_date_start)) {
+        $sql .= " AND \"transaction_date\" >= DATE(:start_date)"; 
+        $params[':start_date'] = $f_date_start;
+    }
+    if (!empty($f_date_end)) {
+        $sql .= " AND \"transaction_date\" <= DATE(:end_date)";
+        $params[':end_date'] = $f_date_end;
     }
 
     // Note for Bulk Download: No LIMIT here. We want ALL matching rows.

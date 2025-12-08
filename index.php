@@ -59,36 +59,58 @@ $error = '';
             <?php elseif ($view === 'view_data'): ?>
                 
                 <?php
-                    // Fetch Data Logic with FILTERS
+                    // Fetch Data Logic with EXTENDED FILTERS
                     $page = $_GET['page'] ?? 1;
                     $fetchLimit = 100;
                     $tableName = 'iceberg.adhoc.ufaa_23203159';
 
                     // Capture Filter Inputs
-                    $filterName = $_GET['filter_name'] ?? '';
-                    $filterDate = $_GET['filter_date'] ?? '';
+                    $f_name = $_GET['f_name'] ?? '';
+                    $f_id   = $_GET['f_id'] ?? '';
+                    $f_dob  = $_GET['f_dob'] ?? '';
+                    $f_amount = $_GET['f_amount'] ?? '';
+                    $f_date_start = $_GET['f_date_start'] ?? '';
+                    $f_date_end   = $_GET['f_date_end'] ?? '';
 
                     try {
                         // Build Query Dynamically
                         $sql = "SELECT * FROM $tableName WHERE 1=1";
                         $params = [];
 
-                        // 1. Name Filter (Case Insensitive Partial Match)
-                        if (!empty($filterName)) {
-                            // Note: Trino usually requires LOWER() for case insensitivity
-                            // Using standard SQL standard for pattern
+                        // 1. Owner Name (Partial)
+                        if (!empty($f_name)) {
                             $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
-                            $params[':name'] = '%' . strtolower($filterName) . '%';
+                            $params[':name'] = '%' . strtolower($f_name) . '%';
+                        }
+                        
+                        // 2. Owner ID (Exact or Partial? ID implies exact usually, but text so maybe partial)
+                        if (!empty($f_id)) {
+                             $sql .= " AND \"owner_id\" LIKE :id";
+                             $params[':id'] = '%' . $f_id . '%';
                         }
 
-                        // 2. Date Filter (Exact Match)
-                        if (!empty($filterDate)) {
-                            $sql .= " AND \"transaction_date\" = :date";
-                            $params[':date'] = $filterDate; // Assuming YYYY-MM-DD input matches DB format
+                        // 3. DOB (Exact)
+                        if (!empty($f_dob)) {
+                            $sql .= " AND \"owner_dob\" = :dob";
+                            $params[':dob'] = $f_dob;
                         }
 
-                        // Add Ordering (Optional, but good for UX)
-                        // $sql .= " ORDER BY some_date DESC"; // Only if we are sure of column
+                        // 4. Amount (Exact or Greater? User said "filters for each column", assumption: exact match for now)
+                        if (!empty($f_amount)) {
+                            $sql .= " AND \"owner_due_amount\" = :amount"; // Trino is tricky with float/int types, hopefully exact match works
+                            $params[':amount'] = $f_amount;
+                        }
+
+                        // 5. Transaction Date Range
+                        if (!empty($f_date_start)) {
+                            // Cast to date if needed, or assume string comparison works for ISO dates
+                            $sql .= " AND \"transaction_date\" >= DATE(:start_date)"; 
+                            $params[':start_date'] = $f_date_start;
+                        }
+                        if (!empty($f_date_end)) {
+                            $sql .= " AND \"transaction_date\" <= DATE(:end_date)";
+                            $params[':end_date'] = $f_date_end;
+                        }
 
                         // Add Limit
                         $sql .= " LIMIT :limit";
@@ -104,7 +126,6 @@ $error = '';
                         $dataStmt->execute();
                         $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                        // If rows exist, we get header metadata from keys
                         $totalRows = count($rows) . (count($rows) >= $fetchLimit ? "+" : "");
 
                     } catch (Exception $e) {
@@ -115,27 +136,52 @@ $error = '';
 
                 <h2 style="margin-bottom: 1rem;">Data Viewer</h2>
                 
-                <!-- Search & Actions Bar -->
+                <!-- Expanded Search Bar -->
                 <div class="glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
-                    <form method="GET" action="index.php" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                    <form method="GET" action="index.php">
                         <input type="hidden" name="view" value="view_data">
                         
-                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
-                            <label class="form-label">Owner Name</label>
-                            <input type="text" name="filter_name" class="form-control" placeholder="Search by name..." value="<?php echo htmlspecialchars($filterName); ?>">
-                        </div>
-                        
-                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
-                            <label class="form-label">Transaction Date</label>
-                            <input type="date" name="filter_date" class="form-control" value="<?php echo htmlspecialchars($filterDate); ?>">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                            
+                            <!-- Row 1 -->
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Owner Name</label>
+                                <input type="text" name="f_name" class="form-control" placeholder="E.g. Elias" value="<?php echo htmlspecialchars($f_name); ?>">
+                            </div>
+                            
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Owner ID</label>
+                                <input type="text" name="f_id" class="form-control" placeholder="ID Number" value="<?php echo htmlspecialchars($f_id); ?>">
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Owner DOB</label>
+                                <input type="date" name="f_dob" class="form-control" value="<?php echo htmlspecialchars($f_dob); ?>">
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Due Amount</label>
+                                <input type="number" step="0.01" name="f_amount" class="form-control" placeholder="100.00" value="<?php echo htmlspecialchars($f_amount); ?>">
+                            </div>
+
+                            <!-- Row 2: Date Range -->
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Trans. Date From</label>
+                                <input type="date" name="f_date_start" class="form-control" value="<?php echo htmlspecialchars($f_date_start); ?>">
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Trans. Date To</label>
+                                <input type="date" name="f_date_end" class="form-control" value="<?php echo htmlspecialchars($f_date_end); ?>">
+                            </div>
                         </div>
 
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <a href="index.php?view=view_data" class="btn btn-secondary">Reset Filters</a>
                             <button type="submit" class="btn btn-primary">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.5rem"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                Filter
+                                Apply Filters
                             </button>
-                            <a href="index.php?view=view_data" class="btn btn-secondary">Reset</a>
                         </div>
                     </form>
                 </div>
@@ -145,8 +191,18 @@ $error = '';
                         Showing: <strong><?php echo $totalRows; ?></strong> result(s)
                     </p>
                     
-                    <!-- Download Button now passes current filters -->
-                    <a href="download_handler.php?filter_name=<?php echo urlencode($filterName); ?>&filter_date=<?php echo urlencode($filterDate); ?>" class="btn btn-secondary">
+                    <!-- Build Download Link with all params -->
+                    <?php
+                        $dlParams = http_build_query([
+                            'f_name' => $f_name,
+                            'f_id' => $f_id,
+                            'f_dob' => $f_dob,
+                            'f_amount' => $f_amount,
+                            'f_date_start' => $f_date_start,
+                            'f_date_end' => $f_date_end
+                        ]);
+                    ?>
+                    <a href="download_handler.php?<?php echo $dlParams; ?>" class="btn btn-secondary">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.5rem"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         Download Results
                     </a>
