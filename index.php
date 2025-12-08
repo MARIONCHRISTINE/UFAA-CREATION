@@ -77,13 +77,25 @@ $error = '';
                         $sql = "SELECT * FROM $tableName WHERE 1=1";
                         $params = [];
 
-                        // 1. Owner Name (Partial)
+                        // 1. Owner Name (Bulk Search Support)
+                        // User wants to paste "multiple names".
+                        // Strategy: Split by comma or newline, build REGEXP string for Trino
+                        // LOWER("column") REGEXP_LIKE 'name1|name2|...'
                         if (!empty($f_name)) {
-                            $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
-                            $params[':name'] = '%' . strtolower($f_name) . '%';
+                            // Split by comma or newline
+                            $names = preg_split('/[\s,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
+                            
+                            if (count($names) > 0) {
+                                // Escape each name for regex safety, then join with |
+                                $cleanedNames = array_map(function($n) { return preg_quote(strtolower($n)); }, $names);
+                                $regex = implode('|', $cleanedNames);
+                                
+                                $sql .= " AND REGEXP_LIKE(LOWER(\"﻿owner_name\"), :name_regex)";
+                                $params[':name_regex'] = $regex;
+                            }
                         }
                         
-                        // 2. Owner ID (Exact or Partial? ID implies exact usually, but text so maybe partial)
+                        // 2. Owner ID (Exact or Partial)
                         if (!empty($f_id)) {
                              $sql .= " AND \"owner_id\" LIKE :id";
                              $params[':id'] = '%' . $f_id . '%';
@@ -95,20 +107,25 @@ $error = '';
                             $params[':dob'] = $f_dob;
                         }
 
-                        // 4. Amount (Exact or Greater? User said "filters for each column", assumption: exact match for now)
-                        if (!empty($f_amount)) {
-                            $sql .= " AND \"owner_due_amount\" = :amount"; // Trino is tricky with float/int types, hopefully exact match works
-                            $params[':amount'] = $f_amount;
+                        // 4. Amount (Fixing strict type issues)
+                        if (strlen($f_amount) > 0) { // Check length to allow "0"
+                            // CAST column to double/decimal to be safe against variance
+                            // OR simply send as is. Trino usually likes numbers without quotes for numeric types.
+                            // Client bindValue handles int/float quoting if we pass typed param, or we rely on string casting.
+                            // Let's force it to be matched as DOUBLE if column is double.
+                            $sql .= " AND \"owner_due_amount\" = :amount";
+                            $params[':amount'] = $f_amount; 
                         }
 
-                        // 5. Transaction Date Range
+                        // 5. Transaction Date Range (Robust Casting)
                         if (!empty($f_date_start)) {
-                            // Cast to date if needed, or assume string comparison works for ISO dates
-                            $sql .= " AND \"transaction_date\" >= DATE(:start_date)"; 
+                            // Ensure we compare against a DATE type. 
+                            // If column is timestamp, CAST(col AS DATE) works.
+                            $sql .= " AND CAST(\"transaction_date\" AS DATE) >= DATE(:start_date)"; 
                             $params[':start_date'] = $f_date_start;
                         }
                         if (!empty($f_date_end)) {
-                            $sql .= " AND \"transaction_date\" <= DATE(:end_date)";
+                            $sql .= " AND CAST(\"transaction_date\" AS DATE) <= DATE(:end_date)";
                             $params[':end_date'] = $f_date_end;
                         }
 
@@ -120,6 +137,10 @@ $error = '';
                         
                         // Bind all params
                         foreach ($params as $key => $val) {
+                            // Special handling for Amount to ensure it's not quoted as string if it looks like number
+                            // Our TrinoClient bindValue (custom) needs to know.
+                            // However, we just pass value, let Client logic decide or update Client.
+                            // Ideally, Trino accepts '100.00' for decimal comparison, so string is usually fine.
                             $dataStmt->bindValue($key, $val);
                         }
                         
@@ -144,9 +165,9 @@ $error = '';
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                             
                             <!-- Row 1 -->
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label class="form-label">Owner Name</label>
-                                <input type="text" name="f_name" class="form-control" placeholder="E.g. Elias" value="<?php echo htmlspecialchars($f_name); ?>">
+                            <div class="form-group" style="margin-bottom:0; grid-column: span 2;">
+                                <label class="form-label">Owner Name(s) <small class="text-muted">(Paste multiple separated by space or comma)</small></label>
+                                <textarea name="f_name" class="form-control" rows="1" placeholder="Search by name(s)..."><?php echo htmlspecialchars($f_name); ?></textarea>
                             </div>
                             
                             <div class="form-group" style="margin-bottom:0;">

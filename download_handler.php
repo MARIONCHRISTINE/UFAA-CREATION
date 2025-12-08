@@ -16,10 +16,15 @@ try {
     $f_date_start = $_GET['f_date_start'] ?? '';
     $f_date_end   = $_GET['f_date_end'] ?? '';
 
-    // 1. Owner Name
+    // 1. Owner Name (Bulk Regex)
     if (!empty($f_name)) {
-        $sql .= " AND LOWER(\"﻿owner_name\") LIKE :name";
-        $params[':name'] = '%' . strtolower($f_name) . '%';
+        $names = preg_split('/[\s,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($names) > 0) {
+            $cleanedNames = array_map(function($n) { return preg_quote(strtolower($n)); }, $names);
+            $regex = implode('|', $cleanedNames);
+            $sql .= " AND REGEXP_LIKE(LOWER(\"﻿owner_name\"), :name_regex)";
+            $params[':name_regex'] = $regex;
+        }
     }
     
     // 2. Owner ID
@@ -35,18 +40,18 @@ try {
     }
 
     // 4. Amount
-    if (!empty($f_amount)) {
+    if (strlen($f_amount) > 0) {
         $sql .= " AND \"owner_due_amount\" = :amount";
         $params[':amount'] = $f_amount;
     }
 
     // 5. Transaction Date Range
     if (!empty($f_date_start)) {
-        $sql .= " AND \"transaction_date\" >= DATE(:start_date)"; 
+        $sql .= " AND CAST(\"transaction_date\" AS DATE) >= DATE(:start_date)"; 
         $params[':start_date'] = $f_date_start;
     }
     if (!empty($f_date_end)) {
-        $sql .= " AND \"transaction_date\" <= DATE(:end_date)";
+        $sql .= " AND CAST(\"transaction_date\" AS DATE) <= DATE(:end_date)";
         $params[':end_date'] = $f_date_end;
     }
 
