@@ -1,49 +1,38 @@
 <?php
-// Run this file in your browser: http://localhost/UFAA-CREATION/test_connection.php
+// Lightweight Connection Tester
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-echo "<h1>Database Connection Diagnostic</h1>";
+echo "<h1>Fast Connection Check</h1>";
+echo "<p>Testing connection to <strong>Host: 172.23.56.100</strong> on <strong>Port: 8445</strong>...</p>";
+
+$start = microtime(true);
 
 try {
     require_once 'db.php';
-    echo "<div style='color: green; font-weight: bold;'>✅ Success! Connection to MySQL established.</div>";
     
-    echo "<h3>Connection Details:</h3>";
-    echo "<ul>";
-    echo "<li>Host: $host</li>";
-    echo "<li>Database: $db</li>";
-    echo "<li>User: $user</li>";
-    echo "</ul>";
+    // 1. Simple Ping
+    $pdo->query("SELECT 1");
+    echo "<div style='color: green; font-weight: bold;'>✅ TCP Connection & Auth Successful!</div>";
+    
+    $duration = round(microtime(true) - $start, 4);
+    echo "<p>Time taken: {$duration} seconds</p>";
 
-    echo "<h3>Table Check:</h3>";
-    $tableName = 'ufaa_23203159'; // Your table
-    $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
-    if ($stmt->rowCount() > 0) {
-        echo "<div style='color: green;'>✅ Table <code>$tableName</code> exists.</div>";
-        
-        // Show columns to verify structure
-        $cols = $pdo->query("DESCRIBE $tableName")->fetchAll();
-        echo "<br><strong>Columns Found:</strong><br><pre>";
-        foreach($cols as $col) {
-            echo $col['Field'] . " (" . $col['Type'] . ")\n";
-        }
-        echo "</pre>";
-        
-    } else {
-        echo "<div style='color: red;'>❌ Table <code>$tableName</code> NOT found in database <code>$db</code>.</div>";
-        echo "<p>Please check if the table name is correct or if it's in a different database.</p>";
+    // 2. Simple Table Access (No Metadata/Show Tables)
+    // We try to select 0 rows just to check if table exists and we have permission
+    $tableName = 'iceberg.adhoc.ufaa_23203159';
+    echo "<p>Checking existence of table: <code>$tableName</code>...</p>";
+    
+    try {
+        $pdo->query("SELECT * FROM $tableName LIMIT 0");
+        echo "<div style='color: green;'>✅ Table found and accessible!</div>";
+    } catch (Exception $e) {
+        echo "<div style='color: orange;'>⚠️ Connection OK, but Table check failed.</div>";
+        echo "<small>" . $e->getMessage() . "</small>";
     }
 
 } catch (Exception $e) {
     echo "<div style='color: red; font-weight: bold;'>❌ Connection Failed</div>";
-    echo "<p>Error Message: " . $e->getMessage() . "</p>";
-    
-    echo "<h3>Troubleshooting Tips:</h3>";
-    echo "<ul>";
-    echo "<li><strong>Unknown Database?</strong>: Check if '$db' is the correct name.</li>";
-    echo "<li><strong>Access Denied?</strong>: Check password for user '$user'.</li>";
-    echo "<li><strong>Connection Refused?</strong>: If DB is on a company server, change <code>\$host = 'localhost'</code> in <code>db.php</code> to the server IP (e.g., 172.23.56.100).</li>";
-    echo "</ul>";
+    echo "<p>Error: " . $e->getMessage() . "</p>";
 }
 ?>
