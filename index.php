@@ -77,17 +77,17 @@ $error = '';
                         $sql = "SELECT * FROM $tableName WHERE 1=1";
                         $params = [];
 
-                        // 1. Owner Name (Bulk Search Support)
-                        // User wants to paste "multiple names".
-                        // Strategy: Split by comma or newline, build REGEXP string for Trino
-                        // LOWER("column") REGEXP_LIKE 'name1|name2|...'
+                        // 1. Owner Name (Bulk Search Support - Exact Phrases)
+                        // User wants to paste "multiple names" but also "specific full name".
+                        // Strategy: Split by NEWLINE or COMMA only. Do NOT split by SPACE.
+                        // This allows pasting "Elias Juma" and finding exactly "Elias Juma".
                         if (!empty($f_name)) {
-                            // Split by comma or newline
-                            $names = preg_split('/[\s,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
+                            // Split by newline or comma. NOT by space.
+                            $names = preg_split('/[\n\r,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
                             
                             if (count($names) > 0) {
-                                // Escape each name for regex safety, then join with |
-                                $cleanedNames = array_map(function($n) { return preg_quote(strtolower($n)); }, $names);
+                                // Trim spaces around each name (e.g. " Elias Juma " -> "Elias Juma")
+                                $cleanedNames = array_map(function($n) { return preg_quote(strtolower(trim($n))); }, $names);
                                 $regex = implode('|', $cleanedNames);
                                 
                                 $sql .= " AND REGEXP_LIKE(LOWER(\"﻿owner_name\"), :name_regex)";
@@ -107,14 +107,11 @@ $error = '';
                             $params[':dob'] = $f_dob;
                         }
 
-                        // 4. Amount (Fixing strict type issues)
-                        if (strlen($f_amount) > 0) { // Check length to allow "0"
-                            // CAST column to double/decimal to be safe against variance
-                            // OR simply send as is. Trino usually likes numbers without quotes for numeric types.
-                            // Client bindValue handles int/float quoting if we pass typed param, or we rely on string casting.
-                            // Let's force it to be matched as DOUBLE if column is double.
-                            $sql .= " AND \"owner_due_amount\" = :amount";
-                            $params[':amount'] = $f_amount; 
+                        // 4. Amount (Flexible Numeric Match)
+                        // Cast DB value to DOUBLE to match integers against stored decimals (100 == 100.00)
+                        if (strlen($f_amount) > 0) { 
+                            $sql .= " AND CAST(\"owner_due_amount\" AS DOUBLE) = :amount";
+                            $params[':amount'] = (float)$f_amount; // PHP float handling
                         }
 
                         // 5. Transaction Date Range (Robust Casting)

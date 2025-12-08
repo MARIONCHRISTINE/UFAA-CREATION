@@ -16,11 +16,12 @@ try {
     $f_date_start = $_GET['f_date_start'] ?? '';
     $f_date_end   = $_GET['f_date_end'] ?? '';
 
-    // 1. Owner Name (Bulk Regex)
+    // 1. Owner Name (Bulk Regex - Exact Phrase)
     if (!empty($f_name)) {
-        $names = preg_split('/[\s,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
+        // Split by Newline or Comma only (keep spaces)
+        $names = preg_split('/[\n\r,]+/', $f_name, -1, PREG_SPLIT_NO_EMPTY);
         if (count($names) > 0) {
-            $cleanedNames = array_map(function($n) { return preg_quote(strtolower($n)); }, $names);
+            $cleanedNames = array_map(function($n) { return preg_quote(strtolower(trim($n))); }, $names);
             $regex = implode('|', $cleanedNames);
             $sql .= " AND REGEXP_LIKE(LOWER(\"﻿owner_name\"), :name_regex)";
             $params[':name_regex'] = $regex;
@@ -39,10 +40,10 @@ try {
         $params[':dob'] = $f_dob;
     }
 
-    // 4. Amount
+    // 4. Amount (Flexible Numeric)
     if (strlen($f_amount) > 0) {
-        $sql .= " AND \"owner_due_amount\" = :amount";
-        $params[':amount'] = $f_amount;
+        $sql .= " AND CAST(\"owner_due_amount\" AS DOUBLE) = :amount";
+        $params[':amount'] = (float)$f_amount;
     }
 
     // 5. Transaction Date Range
