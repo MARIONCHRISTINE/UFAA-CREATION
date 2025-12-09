@@ -11,7 +11,20 @@ $error = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     
     $file = $_FILES['csv_file']['tmp_name'];
+    $fileName = $_FILES['csv_file']['name']; // checking duplicate files
     
+    // 1. Check if file already uploaded (Local Registry)
+    $registryFile = 'uploads_registry.json';
+    $registry = file_exists($registryFile) ? json_decode(file_get_contents($registryFile), true) : [];
+    
+    if (in_array($fileName, $registry)) {
+        // File already processed
+        // Redirect with error
+        $error = "File '$fileName' has already been uploaded.";
+        header("Location: index.php?view=upload&error=" . urlencode($error));
+        exit;
+    }
+
     if (is_uploaded_file($file)) {
         try {
             $handle = fopen($file, "r");
@@ -26,16 +39,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("File is empty or invalid CSV.");
             }
 
-            // Sanitize headers for SQL (prevent injections)
-            $columns = array_map(function($h) {
-                return preg_replace('/[^a-zA-Z0-9_]/', '', trim($h));
-            }, $headers);
+            // Headers: Just trim, do NOT regex remove characters (Preserve BOM for Trino)
+            // We assume CSV headers exactly match DB Column names now.
+            $columns = array_map('trim', $headers);
             
-            $colString = implode(", ", $columns);
-            $valPlaceholders = implode(", ", array_fill(0, count($columns), "?"));
+            // identify Date Columns for processing (Specific to user request)
+            $dateColIndices = [];
+            foreach ($columns as $idx => $colName) {
+                $lowerCol = strtolower($colName);
+                // User specified: owner_dob and transaction_date
+                if (strpos($lowerCol, 'dob') !== false || strpos($lowerCol, 'transaction_date') !== false) {
+                    $dateColIndices[] = $idx;
+                }
+            }
 
-            // Check if columns exist in DB (Soft check or just try Insert)
-            // We will trust the user that CSV headers match DB columns for now.
+            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $columns)); // Quote columns for safe SQL
+            $valPlaceholders = implode(", ", array_fill(0, count($columns), "?"));
 
             $sql = "INSERT INTO $tableName ($colString) VALUES ($valPlaceholders)";
             $stmt = $pdo->prepare($sql);
@@ -49,6 +68,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 // Skip if row column count doesn't match header count
                 if (count($data) !== count($columns)) {
                     continue; 
+                }
+
+                // Process Data (Transform Dates & Handle Blanks)
+                foreach ($data as $key => $val) {
+                    $val = trim($val);
+                    if ($val === '') {
+                        $data[$key] = null; // Send NULL for blanks, don't try to fill
+                    } else {
+                        // Apply Date Transform only if it's a date column
+                        if (in_array($key, $dateColIndices)) {
+                            $data[$key] = transformDate($val);
+                        }
+                    }
                 }
 
                 $stmt->execute($data);
@@ -65,9 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             // Commit remaining
             $pdo->commit();
+
+            // Log success to registry
+            $registry[] = $fileName;
+            file_put_contents($registryFile, json_encode($registry));
+
             fclose($handle);
 
-            $message = "Successfully uploaded $rowCount rows to the database.";
+            $message = "Successfully uploaded $rowCount rows.";
 
         } catch (Exception $e) {
             if ($pdo->inTransaction()) {
@@ -76,12 +113,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $error = "Error: " . $e->getMessage();
         }
     } else {
-        $error = "No file uploaded or upload error.";
+        $error = "No file uploaded.";
     }
-} else {
-    // If accessed directly without post
-    header("Location: index.php");
-    exit;
+}
+
+// Helper to convert confusing kinds of dates to YYYY-MM-DD
+function transformDate($dateStr) {
+    $dateStr = trim($dateStr);
+    if (empty($dateStr)) return null;
+
+    // Try Standard Y-m-d first
+    $d = DateTime::createFromFormat('Y-m-d', $dateStr);
+    if ($d && $d->format('Y-m-d') === $dateStr) return $dateStr;
+
+    // Try Common formats
+    $formats = [
+        'd/m/Y', 'm/d/Y', 'd-m-Y', 'Y/m/d', 'd.m.Y'
+    ];
+
+    foreach ($formats as $fmt) {
+        $d = DateTime::createFromFormat($fmt, $dateStr);
+        if ($d) {
+             return $d->format('Y-m-d');
+        }
+    }
+
+    // Fallback: Parsing
+    $ts = strtotime($dateStr);
+    if ($ts) {
+        return date('Y-m-d', $ts);
+    }
+
+    // Return original if failed (Worst case DB rejects it, but we tried)
+    return $dateStr;
 }
 
 // Redirect back to index with message
