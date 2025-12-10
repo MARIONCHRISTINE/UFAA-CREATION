@@ -119,18 +119,19 @@ $error = '';
                         // 4. Amount (Flexible Numeric Match)
                         // Cast DB value to DOUBLE to match integers against stored decimals (100 == 100.00)
                         if (strlen($f_amount) > 0) { 
-                            $sql .= " AND CAST(\"owner_due_amount\" AS DOUBLE) = :amount";
+                            $sql .= " AND CAST(\"owner_due_amount\" AS DOUBLE) = CAST(:amount AS DOUBLE)";
                             $params[':amount'] = (float)$f_amount; // PHP float handling
                         }
 
                         // 5. Transaction Date Range (Robust Casting)
                         if (!empty($f_date_start)) {
                             // Ensure we compare against a DATE type. 
-                            $sql .= " AND CAST(\"transaction_date\" AS DATE) >= DATE(:start_date)"; 
+                            // Trino: CAST('2023-01-01' AS DATE) is robust. DATE(...) is not a function for strings.
+                            $sql .= " AND CAST(\"transaction_date\" AS DATE) >= CAST(:start_date AS DATE)"; 
                             $params[':start_date'] = $f_date_start;
                         }
                         if (!empty($f_date_end)) {
-                            $sql .= " AND CAST(\"transaction_date\" AS DATE) <= DATE(:end_date)";
+                            $sql .= " AND CAST(\"transaction_date\" AS DATE) <= CAST(:end_date AS DATE)";
                             $params[':end_date'] = $f_date_end;
                         }
 

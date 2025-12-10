@@ -230,7 +230,7 @@ class TrinoStatement {
         }
         
         // String
-        return "'" . addslashes($val) . "'";
+        return "'" . addslashes((string)$val) . "'";
     }
 
     public function fetchAll($mode = null) {

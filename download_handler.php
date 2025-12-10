@@ -40,31 +40,6 @@ try {
          }
     }
 
-    // 3. DOB
-    if (!empty($f_dob)) {
-        $sql .= " AND \"owner_dob\" = :dob";
-        $params[':dob'] = $f_dob;
-    }
-
-    // 4. Amount (Flexible Numeric)
-    if (strlen($f_amount) > 0) {
-        $sql .= " AND CAST(\"owner_due_amount\" AS DOUBLE) = :amount";
-        $params[':amount'] = (float)$f_amount;
-    }
-
-    // 5. Transaction Date Range
-    if (!empty($f_date_start)) {
-        $sql .= " AND CAST(\"transaction_date\" AS DATE) >= DATE(:start_date)"; 
-        $params[':start_date'] = $f_date_start;
-    }
-    if (!empty($f_date_end)) {
-        $sql .= " AND CAST(\"transaction_date\" AS DATE) <= DATE(:end_date)";
-        $params[':end_date'] = $f_date_end;
-    }
-
-    // Note for Bulk Download: No LIMIT here. We want ALL matching rows.
-    
-    $stmt = $pdo->prepare($sql);
     
     // Bind
     foreach ($params as $key => $val) {
