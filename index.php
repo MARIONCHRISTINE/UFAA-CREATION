@@ -2,6 +2,12 @@
 require_once 'db.php';
 
 // Simple Router / State Management
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
 $view = $_GET['view'] ?? 'upload'; // Default to upload view
 $message = '';
 $error = '';
@@ -20,9 +26,12 @@ $error = '';
 <body>
 
 <div class="container fade-in">
-    <header>
+    <header style="position:relative;">
         <h1>UFAA Data Manager</h1>
         <p>Upload, View, and Manage Massive Datasets</p>
+        <a href="logout.php" class="btn btn-secondary" style="position: absolute; top: 0; right: 0; padding: 0.5rem 1rem; font-size: 0.8rem;">
+            Logout
+        </a>
     </header>
 
     <div class="glass-card">
