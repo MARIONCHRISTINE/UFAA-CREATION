@@ -76,7 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             // Create Normalization Map: clean_name -> real_name
             $colMap = [];
             foreach ($realColumns as $realCol) {
-                $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($realCol));
+                // Remove underscore too, so "owner_name" becomes "ownername"
+                $cleanKey = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($realCol));
                 $colMap[$cleanKey] = $realCol;
             }
 
@@ -94,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 $rawHeader = trim($csvCol);
                 if ($rawHeader === '') continue; // Skip empty headers
 
-                $cleanCsv = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($rawHeader));
+                $cleanCsv = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($rawHeader));
                 
                 if (isset($colMap[$cleanCsv])) {
                     $targetColumns[] = $colMap[$cleanCsv];
