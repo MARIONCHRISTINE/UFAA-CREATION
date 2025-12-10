@@ -69,33 +69,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("File is empty or invalid CSV.");
             }
 
-            // Map CSV Headers to Real DB Columns
-            $finalCols = [];
-            foreach ($headers as $csvCol) {
-                $cleanCsv = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower(trim($csvCol)));
+            // Map CSV Headers to Real DB Columns & Track Indices
+            $targetColumns = []; // The DB column names we will insert into
+            $targetIndices = []; // The CSV index corresponding to that column
+            
+            foreach ($headers as $idx => $csvCol) {
+                $rawHeader = trim($csvCol);
+                if ($rawHeader === '') {
+                    // Skip empty headers (fixes "Zero-length delimited identifier" error)
+                    continue; 
+                }
+
+                $cleanCsv = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($rawHeader));
                 
                 if (isset($colMap[$cleanCsv])) {
-                    $finalCols[] = $colMap[$cleanCsv];
+                    $targetColumns[] = $colMap[$cleanCsv];
+                    $targetIndices[] = $idx;
                 } else {
-                    // Column in CSV not found in DB? 
-                    // We can skip it or try to use it as is. 
-                    // Let's use as is (quoted) and hope, but likely will fail if strict.
-                    $finalCols[] = trim($csvCol);
+                    // Fallback using the raw header if not found in DB map
+                    // (Ensure it's not empty, which we checked above)
+                    $targetColumns[] = $rawHeader;
+                    $targetIndices[] = $idx;
                 }
             }
             
+            if (empty($targetColumns)) {
+                throw new Exception("No valid columns found in CSV.");
+            }
+
             // Re-identify Date Columns based on FINAL names
-            $dateColIndices = [];
-            foreach ($finalCols as $idx => $colName) {
+            $dateColIndices = []; // Keyed by position in our NEW target list, or checking name?
+            // Actually, we check the name in $targetColumns.
+            // But we need to know when processing data...
+            // Let's just check the name inside the data loop or build a map: targetIndex => isDate
+            $isDateCol = [];
+            foreach ($targetColumns as $i => $colName) {
                 $lowerCol = strtolower($colName);
                 if (strpos($lowerCol, 'dob') !== false || strpos($lowerCol, 'transaction_date') !== false) {
-                    $dateColIndices[] = $idx;
+                    $isDateCol[$i] = true;
                 }
             }
 
-            // Quote columns correctly
-            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $finalCols)); 
-            $valPlaceholders = implode(", ", array_fill(0, count($finalCols), "?"));
+            // Use the FILTERED list for SQL
+            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns)); 
+            $valPlaceholders = implode(", ", array_fill(0, count($targetColumns), "?"));
 
             $sql = "INSERT INTO $tableName ($colString) VALUES ($valPlaceholders)";
             $stmt = $pdo->prepare($sql);
@@ -106,27 +123,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $batchCount = 0;
 
             while (($data = fgetcsv($handle)) !== false) {
-                // Skip if row column count doesn't match header count
-                if (count($data) !== count($headers)) { // Compare against original header count
-                    continue; 
-                }
+                // We do NOT skip rows even if length mismatches.
+                // We try to map whatever we can find using targetIndices.
                 
-                // If we mapped columns, we must ensure data aligns. 
-                // Assuming CSV order matches Header order, so index mapping is 1:1.
-
-                // Process Data (Transform Dates & Handle Blanks)
-                foreach ($data as $key => $val) {
-                    $val = trim($val);
+                $rowValues = [];
+                
+                foreach ($targetIndices as $i => $csvIdx) {
+                    // Get value from CSV row at preserved index
+                    $val = isset($data[$csvIdx]) ? trim($data[$csvIdx]) : null;
+                    
                     if ($val === '') {
-                        $data[$key] = null; 
+                        $val = null;
                     } else {
-                        if (in_array($key, $dateColIndices)) {
-                            $data[$key] = transformDate($val);
-                        }
+                         // Check if this specific target column is a date
+                         if (isset($isDateCol[$i])) {
+                             $val = transformDate($val);
+                         }
                     }
+                    $rowValues[] = $val;
                 }
 
-                $stmt->execute($data);
+                $stmt->execute($rowValues);
                 $rowCount++;
                 $batchCount++;
 
