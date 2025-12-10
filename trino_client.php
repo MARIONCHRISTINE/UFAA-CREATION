@@ -29,6 +29,8 @@ class TrinoClient {
 
     // Main execution logic
     private function execRaw($sql) {
+        set_time_limit(600); // Allow 10 minutes for PHP execution logic (waiting for DB)
+        
         // Trino API Endpoint
         $url = "https://{$this->host}:{$this->port}/v1/statement";
         
@@ -48,7 +50,7 @@ class TrinoClient {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0); 
         curl_setopt($ch, CURLOPT_USERPWD, "{$this->user}:{$this->pass}");
-        curl_setopt($ch, CURLOPT_TIMEOUT, 120); // Increased timeout for heavy queries
+        curl_setopt($ch, CURLOPT_TIMEOUT, 300); // 5 Minutes CURL timeout
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -95,6 +97,9 @@ class TrinoClient {
             }
 
             if (isset($currentResponse['nextUri'])) {
+                // Polling Delay: Don't hammer the server
+                usleep(100000); // 100ms sleep
+                
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $currentResponse['nextUri']);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, ["X-Trino-User: {$this->user}"]);

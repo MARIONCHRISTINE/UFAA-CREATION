@@ -114,49 +114,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns)); 
             $valPlaceholders = implode(", ", array_fill(0, count($targetColumns), "?"));
 
-            $sql = "INSERT INTO $tableName ($colString) VALUES ($valPlaceholders)";
-            $stmt = $pdo->prepare($sql);
-
-            $pdo->beginTransaction();
+            // Performance Optimization: BULK INSERT
+            // Instead of executing 1 query per row (slow over HTTP), we group 500 rows into ONE query.
+            // INSERT INTO table (...) VALUES (r1), (r2), (r3)...
+            
+            $batchSize = 200; // 200 is safe for URL limits
+            $rowsBuffer = [];
+            $columnListSQL = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns));
             
             $rowCount = 0;
-            $batchCount = 0;
 
             while (($data = fgetcsv($handle)) !== false) {
-                // We do NOT skip rows even if length mismatches.
-                // We try to map whatever we can find using targetIndices.
-                
+                // Map Data
                 $rowValues = [];
-                
                 foreach ($targetIndices as $i => $csvIdx) {
-                    // Get value from CSV row at preserved index
                     $val = isset($data[$csvIdx]) ? trim($data[$csvIdx]) : null;
                     
                     if ($val === '') {
-                        $val = null;
+                        $val = "NULL";
                     } else {
-                         // Check if this specific target column is a date
                          if (isset($isDateCol[$i])) {
                              $val = transformDate($val);
                          }
+                         
+                         // Trino Safe Quoting:
+                         $val = "'" . str_replace("'", "''", $val) . "'";
                     }
                     $rowValues[] = $val;
                 }
-
-                $stmt->execute($rowValues);
+                
+                // Add (v1, v2, v3) to buffer
+                $rowsBuffer[] = "(" . implode(", ", $rowValues) . ")";
                 $rowCount++;
-                $batchCount++;
 
-                // Commit every Batch Size
-                if ($batchCount >= $batchSize) {
-                    $pdo->commit();
-                    $pdo->beginTransaction();
-                    $batchCount = 0;
+                // If Buffer Full, Execute
+                if (count($rowsBuffer) >= $batchSize) {
+                    $valuesSQL = implode(", ", $rowsBuffer);
+                    $batchSQL = "INSERT INTO $tableName ($columnListSQL) VALUES $valuesSQL";
+                    $pdo->query($batchSQL); // Direct execute
+                    
+                    $rowsBuffer = []; // Reset
                 }
             }
+            
+            // Flush remaining rows
+            if (count($rowsBuffer) > 0) {
+                $valuesSQL = implode(", ", $rowsBuffer);
+                $batchSQL = "INSERT INTO $tableName ($columnListSQL) VALUES $valuesSQL";
+                $pdo->query($batchSQL);
+            }
 
-            // Commit remaining
-            $pdo->commit();
+            // Commit (although Trino auto-commits usually, this is fine)
+            // No explicit transaction wrapping per batch needed for this generic client
 
             // Log success to registry
             $registry[] = $fileName;
