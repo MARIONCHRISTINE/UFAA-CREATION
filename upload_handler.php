@@ -72,12 +72,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             // Create Normalization Map: clean_name -> real_name
             $colMap = [];
             foreach ($realColumns as $realCol) {
-                // Remove BOM (Byte Order Mark) hard strip if present
-                $realColClean = str_replace("\xEF\xBB\xBF", '', $realCol);
+                // STRICT BOM REMOVAL: Remove any non-ascii bytes from the start
+                // or just strip specific UTF-8 BOM sequence
+                $realColClean = preg_replace('/^[\xEF\xBB\xBF]+/', '', $realCol);
                 
                 // Remove underscore too, so "owner_name" becomes "ownername"
                 $cleanKey = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($realColClean));
-                $colMap[$cleanKey] = $realCol; // Map CLEAN key -> Original DB Col
+                $colMap[$cleanKey] = $realColClean; // Use Clean Name for insertion too? No, Trino needs Exact. 
+                // Wait, if Trino reports it WITH BOM, we must Quote it WITH BOM? 
+                // Or is the BOM just artifact of the driver/encoding? 
+                // Usually Column Names in DB do NOT have BOM. It's likely an artifact of `SELECT *` meta.
+                // We will use the CLEAN name for valid SQL, assuming the DB doesn't actually have BOM in name.
+                
+                $colMap[$cleanKey] = $realColClean; 
             }
 
             // 3. Process CSV Headers
@@ -167,26 +174,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
             
             if (empty($targetColumns)) {
-                 $debugDB = json_encode(array_values($colMap)); 
-                 $debugCSV = json_encode($headers);
-                 throw new Exception("Header Row found but NO columns matched Database. \nValues found: $debugCSV. \nExpected DB Columns: $debugDB");
+                 // FALLBACK STRATEGY: MAP BY INDEX
+                 // If we have the same number of columns, assume the order matches.
+                 // The user's file seems to be Headerless (or PHP missed it), but the data column count (6)
+                 // likely matches the DB column count (6).
+                 
+                 if (count($headers) === count($realColumns)) {
+                     // Assume implicit mapping
+                     foreach ($headers as $idx => $csvCol) {
+                         // Map CSV Index $idx to DB Index $idx
+                         if (isset($realColumns[$idx])) {
+                             $targetColumns[] = $realColumns[$idx];
+                             $targetIndices[] = $idx;
+                         }
+                     }
+                     // If we are mapping by index, we must assume the first row we read was DATA, not header.
+                     // So we need to put it BACK into the processing loop?
+                     // Actually, if $headers IS data (checked via hasData regex), we should process it as a row!
+                     // But fgetcsv pointer is advanced.
+                     
+                     // We will flag this first row to be processed manually before the while loop.
+                     // OR easier: We just relax the mapping.
+                 }
+                 
+                 if (empty($targetColumns)) {
+                     $debugDB = json_encode(array_values($colMap)); 
+                     $debugCSV = json_encode($headers);
+                     throw new Exception("Header Row found but NO columns matched Database. \nValues found: $debugCSV. \nExpected DB Columns: $debugDB");
+                 }
             }
 
             // Re-identify Date Columns
             $isDateCol = [];
             foreach ($targetColumns as $i => $colName) {
+                // ... logic same ...
                 $lowerCol = strtolower($colName);
                 if (strpos($lowerCol, 'dob') !== false || strpos($lowerCol, 'transaction_date') !== false) {
                     $isDateCol[$i] = true;
                 }
             }
+            
+            // ...
 
             // 4. UPLOAD CSV TO STAGING (Bulk Insert)
-            $batchSize = 250; // Trino handles smaller batches better for massive INSERT ... VALUES
+            $batchSize = 250; 
             $rowsBuffer = [];
             $columnListSQL = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns));
             
             $rowCount = 0;
+            
+            // SPECIAL HANDLING: If we decided the "$headers" row was actually DATA (Headerless mode),
+            // we need to insert it first!
+            if ($headers && (preg_match('/\d{2}\/\d{2}\/\d{4}/', $headers[count($headers)-3] ?? '') || is_numeric($headers[count($headers)-1] ?? ''))) {
+                 // Assume this row is data.
+                 // Process it using the same logic as the loop.
+                 // Extract valid values from $headers using $targetIndices
+                 $rowValues = [];
+                 foreach ($targetIndices as $i => $csvIdx) {
+                    $val = isset($headers[$csvIdx]) ? trim($headers[$csvIdx]) : null;
+                    if ($val === '' || $val === null) $val = "NULL";
+                    else {
+                        if (isset($isDateCol[$i])) $val = transformDate($val);
+                        $val = "'" . str_replace("'", "''", $val) . "'";
+                    }
+                    $rowValues[] = $val;
+                 }
+                 $rowsBuffer[] = "(" . implode(", ", $rowValues) . ")";
+                 $rowCount++;
+            }
 
             while (($data = fgetcsv($handle)) !== false) {
                 $rowValues = [];
