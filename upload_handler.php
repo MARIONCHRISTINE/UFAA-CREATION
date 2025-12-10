@@ -105,8 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 }
             }
             
+            
             if (empty($targetColumns)) {
-                throw new Exception("No matching columns found between CSV and Database.");
+                // DEBUG: Show what we have
+                $debugDB = json_encode($realColumns);
+                $debugCSV = json_encode($headers);
+                throw new Exception("No matching columns found. DB Cols: $debugDB. CSV Headers: $debugCSV");
             }
 
             // Re-identify Date Columns
