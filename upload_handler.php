@@ -45,7 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             // 1. CLEAR STAGING TABLE
             // User requirement: "Replace" data in Hive first.
-            $pdo->query("DELETE FROM $stagingTable");
+            // ERROR: "Cannot delete from non-managed Hive table"
+            // FIX: We cannot run DELETE. We must use INSERT OVERWRITE for the FIRST batch of data.
+            // $pdo->query("DELETE FROM $stagingTable"); // REMOVED
+            
+            $isFirstBatch = true; // Flag to trigger OVERWRITE on first insert
 
             // 2. GET COLUMNS (from Staging Table to match CSV)
             // We query 1 row from STAGING to get the EXACT column names (handling BOMs etc)
@@ -132,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          if (isset($isDateCol[$i])) {
                              $val = transformDate($val);
                          }
+                
                          $val = "'" . str_replace("'", "''", $val) . "'"; // Safe Quote
                     }
                     $rowValues[] = $val;
@@ -142,16 +147,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
                 if (count($rowsBuffer) >= $batchSize) {
                     $valuesSQL = implode(", ", $rowsBuffer);
-                    $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
+                    
+                    // Strategy: First batch OVERWRITES table. Subsequent batches APPEND.
+                    $insertCmd = $isFirstBatch ? "INSERT OVERWRITE" : "INSERT INTO";
+                    
+                    $batchSQL = "$insertCmd $stagingTable ($columnListSQL) VALUES $valuesSQL";
                     $pdo->query($batchSQL);
+                    
                     $rowsBuffer = [];
+                    $isFirstBatch = false; // Subsequent batches must append
                 }
             }
             
             // Flush remaining
             if (count($rowsBuffer) > 0) {
                 $valuesSQL = implode(", ", $rowsBuffer);
-                $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
+                
+                // If the file was small (only 1 batch), this might be the first and only batch.
+                $insertCmd = $isFirstBatch ? "INSERT OVERWRITE" : "INSERT INTO";
+                
+                $batchSQL = "$insertCmd $stagingTable ($columnListSQL) VALUES $valuesSQL";
                 $pdo->query($batchSQL);
             }
 
