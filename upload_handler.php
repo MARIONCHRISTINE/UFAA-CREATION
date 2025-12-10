@@ -64,11 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
 
             // 2. Process CSV Headers
-            $headers = fgetcsv($handle);
-            if (!$headers) {
-                throw new Exception("File is empty or invalid CSV.");
-            }
-
+            // Note: We already read $headers at line 37. We should NOT read again, or we consume the first data row.
+            
             // Map CSV Headers to Real DB Columns & Track Indices
             $targetColumns = []; // The DB column names we will insert into
             $targetIndices = []; // The CSV index corresponding to that column
