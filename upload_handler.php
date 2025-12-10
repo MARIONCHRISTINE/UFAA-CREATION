@@ -41,33 +41,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             // 0. Define Tables
             $prodTable    = 'iceberg.adhoc.ufaa_23203159';
-            // Generate a unique staging table name to avoid concurrency issues and manually clearing tables
             $stagingTable = 'hive.sre.ufaa_staging_' . uniqid() . '_' . rand(1000, 9999);
 
+            // 1. GET SCHEMA FROM PROD (columns AND types)
+            // We need types to create a fresh Managed Table manually
+            $descStmt = $pdo->query("DESCRIBE $prodTable");
+            $schemaRows = $descStmt->fetchAll(); 
+            
+            if (empty($schemaRows)) {
+                throw new Exception("Could not fetch schema from Production table.");
+            }
+            
+            $colDefs = [];
+            $realColumns = [];
+            
+            foreach ($schemaRows as $row) {
+                // Trino DESCRIBE returns: Column, Type, Extra, Comment
+                // We need Column and Type.
+                $colName = $row['Column'];
+                $colType = $row['Type'];
+                
+                // BOM Cleaning (Just in case)
+                $colName = preg_replace('/^[\xEF\xBB\xBF]+/', '', $colName);
+                
+                // Skip hidden/system columns if any (usually not in DESCRIBE)
+                $realColumns[] = $colName;
+                $colDefs[] = "\"$colName\" $colType";
+            }
+            
+            $createSQL = "CREATE TABLE $stagingTable (" . implode(", ", $colDefs) . ")";
+            
             try {
-                // 1. CREATE DYNAMIC STAGING TABLE (Clone structure from Prod)
-                // We use WITH NO DATA to just get the columns
-                $pdo->query("CREATE TABLE $stagingTable AS SELECT * FROM $prodTable WITH NO DATA");
+                // 2. CREATE MANUALLY (Explicit Managed Table)
+                $pdo->query($createSQL);
             } catch (Exception $e) {
-                // If creation fails (maybe permissions?), we abort early
-               throw new Exception("Failed to create staging table [$stagingTable]: " . $e->getMessage());
+               throw new Exception("Failed to create staging table: " . $e->getMessage());
             }
             
-            // 2. GET COLUMNS (from the New Staging Table - which matches Prod)
-            // SHOW COLUMNS is denied, but SELECT is allowed.
-            // We run a dummy query to get the column metadata from the Trino JSON response.
-            $metaStmt = $pdo->query("SELECT * FROM $stagingTable WHERE 1=0");
+            // 3. (Skipped) GET COLUMNS - We already have $realColumns from the DESCRIBE loop above!
+            // No need to query SHOW COLUMNS or SELECT 1=0 anymore.
             
-            // TrinoClient now supports getColumns() to retrieve headers even if no data
-            $realColumns = $metaStmt->getColumns();
-            
-            if (empty($realColumns)) {
-                 // Fallback: If for some reason 1=0 returns no column signature (unlikely in Trino),
-                 // we rely on the creation itself. The creation was 'AS SELECT * FROM Prod'.
-                 // Let's try to query Prod for headers if Staging fails?
-                 // But permissions might be same.
-                 throw new Exception("Could not retrieve columns from generated staging table.");
-            }
+            // Continue with mapping...
 
             // Create Normalization Map: clean_name -> real_name
             $colMap = [];
