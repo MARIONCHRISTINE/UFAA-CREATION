@@ -40,37 +40,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
 
             // 0. Define Tables
-            $stagingTable = 'hive.sre.UFAA_23203159';
             $prodTable    = 'iceberg.adhoc.ufaa_23203159';
+            // Generate a unique staging table name to avoid concurrency issues and manually clearing tables
+            $stagingTable = 'hive.sre.ufaa_staging_' . uniqid() . '_' . rand(1000, 9999);
 
-            // 1. CLEAR STAGING TABLE
-            // User requirement: "Replace" data in Hive first.
-            // ERROR: "Cannot delete from non-managed Hive table"
-            // FIX: We cannot run DELETE. We must use INSERT OVERWRITE for the FIRST batch of data.
-            // $pdo->query("DELETE FROM $stagingTable"); // REMOVED
+            try {
+                // 1. CREATE DYNAMIC STAGING TABLE (Clone structure from Prod)
+                // We use WITH NO DATA to just get the columns
+                $pdo->query("CREATE TABLE $stagingTable AS SELECT * FROM $prodTable WITH NO DATA");
+            } catch (Exception $e) {
+                // If creation fails (maybe permissions?), we abort early
+               throw new Exception("Failed to create staging table [$stagingTable]: " . $e->getMessage());
+            }
             
-            $isFirstBatch = true; // Flag to trigger OVERWRITE on first insert
-
-            // 2. GET COLUMNS (from Staging Table to match CSV)
-            // We query 1 row from STAGING to get the EXACT column names (handling BOMs etc)
-            $metaStmt = $pdo->query("SELECT * FROM $stagingTable LIMIT 1");
-            $metaRow = $metaStmt->fetch(PDO::FETCH_ASSOC);
+            // 2. GET COLUMNS (from the New Staging Table - which matches Prod)
+            $metaStmt = $pdo->query("SHOW COLUMNS FROM $stagingTable");
+            $colsData = $metaStmt->fetchAll();
+            $realColumns = array_column($colsData, 'Column');
             
-            if (!$metaRow) {
-                // Table might be empty (we just deleted it, or it was new).
-                // If empty, we can't auto-detect columns from data.
-                // WE MUST RELY ON CSV HEADERS matching DB columns if DB is empty.
-                // Or we can try DESCRIBE? Trino: SHOW COLUMNS FROM table
-                $colsStmt = $pdo->query("SHOW COLUMNS FROM $stagingTable"); // Better way to get cols if empty
-                $colsData = $colsStmt->fetchAll();
-                $realColumns = array_column($colsData, 'Column');
-                
-                if (empty($realColumns)) {
-                     // Fallback if SHOW COLUMNS fails (unlikely)
-                     $realColumns = $headers;
-                }
-            } else {
-                $realColumns = array_keys($metaRow);
+            if (empty($realColumns)) {
+                 throw new Exception("Could not retrieve columns from generated staging table.");
             }
 
             // Create Normalization Map: clean_name -> real_name
@@ -101,13 +90,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $targetColumns[] = $colMap[$cleanCsv];
                     $targetIndices[] = $idx;
                 } else {
-                    $targetColumns[] = $rawHeader; // Fallback
-                    $targetIndices[] = $idx;
+                    // If column doesn't match DB, we skip it or error? 
+                    // User preference: "intelligent mapping". 
+                    // If we try to insert into a column that doesn't exist, SQL fails.
+                    // So we only include matched columns.
+                    continue; 
                 }
             }
             
             if (empty($targetColumns)) {
-                throw new Exception("No valid columns found in CSV.");
+                throw new Exception("No matching columns found between CSV and Database.");
             }
 
             // Re-identify Date Columns
@@ -120,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
 
             // 4. UPLOAD CSV TO STAGING (Bulk Insert)
-            $batchSize = 200;
+            $batchSize = 250; // Trino handles smaller batches better for massive INSERT ... VALUES
             $rowsBuffer = [];
             $columnListSQL = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns));
             
@@ -128,10 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             while (($data = fgetcsv($handle)) !== false) {
                 $rowValues = [];
+                // ONLY iterate targetIndices so we match the columns we defined
                 foreach ($targetIndices as $i => $csvIdx) {
                     $val = isset($data[$csvIdx]) ? trim($data[$csvIdx]) : null;
                     
-                    if ($val === '') {
+                    if ($val === '' || $val === null) {
                         $val = "NULL";
                     } else {
                          if (isset($isDateCol[$i])) {
@@ -149,32 +142,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 if (count($rowsBuffer) >= $batchSize) {
                     $valuesSQL = implode(", ", $rowsBuffer);
                     
-                    // Strategy: First batch OVERWRITES table. Subsequent batches APPEND.
-                    $insertCmd = $isFirstBatch ? "INSERT OVERWRITE" : "INSERT INTO";
-                    
-                    $batchSQL = "$insertCmd $stagingTable ($columnListSQL) VALUES $valuesSQL";
+                    // ALWAYS INSERT INTO (Dynamic table is fresh/empty)
+                    $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
                     $pdo->query($batchSQL);
                     
                     $rowsBuffer = [];
-                    $isFirstBatch = false; // Subsequent batches must append
                 }
             }
             
             // Flush remaining
             if (count($rowsBuffer) > 0) {
                 $valuesSQL = implode(", ", $rowsBuffer);
-                
-                // If the file was small (only 1 batch), this might be the first and only batch.
-                $insertCmd = $isFirstBatch ? "INSERT OVERWRITE" : "INSERT INTO";
-                
-                $batchSQL = "$insertCmd $stagingTable ($columnListSQL) VALUES $valuesSQL";
+                $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
                 $pdo->query($batchSQL);
             }
 
-            // 5. PROMOTE TO ICEBERG (The magic step)
-            // SQL: INSERT INTO iceberg... SELECT * FROM hive...
+            // 5. PROMOTE TO ICEBERG
+            // SQL: INSERT INTO iceberg... SELECT * FROM hive_staging...
+            // Note: Since we only inserted matching columns, we should specify columns here too?
+            // "INSERT INTO Prod (col1, col2) SELECT col1, col2 FROM Staging"
+            // But Staging and Prod have same schema (Created from Prod).
+            // So "SELECT *" is safe IF we filled unrelated columns with NULL in staging?
+            // Actually, if we ommitted columns in Staging Insert, they are NULL.
+            // So Schema matches perfectly.
+            
             $promoSQL = "INSERT INTO $prodTable SELECT * FROM $stagingTable";
             $pdo->query($promoSQL);
+
+            // 6. CLEANUP
+            $pdo->query("DROP TABLE $stagingTable");
 
             // Log success to registry
             $registry[] = $fileName;
