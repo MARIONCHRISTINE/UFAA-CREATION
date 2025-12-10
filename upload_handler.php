@@ -72,9 +72,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             // Create Normalization Map: clean_name -> real_name
             $colMap = [];
             foreach ($realColumns as $realCol) {
+                // Remove BOM (Byte Order Mark) hard strip if present
+                $realColClean = str_replace("\xEF\xBB\xBF", '', $realCol);
+                
                 // Remove underscore too, so "owner_name" becomes "ownername"
-                $cleanKey = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($realCol));
-                $colMap[$cleanKey] = $realCol;
+                $cleanKey = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($realColClean));
+                $colMap[$cleanKey] = $realCol; // Map CLEAN key -> Original DB Col
             }
 
             // 3. Process CSV Headers
@@ -83,12 +86,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("File is empty or invalid CSV.");
             }
 
+            // ANALYSIS: Check if the "Headers" look like Data?
+            // User's debug showed: ["2NK SACCO LIMITED", "", "", "03/08/2022", ...]
+            // If we find date-like or number-like strings in the first row, it's likely missing headers.
+            $looksLikeData = false;
+            foreach ($headers as $h) {
+                if (preg_match('/\d{2}\/\d{2}\/\d{4}/', $h) || is_numeric($h)) {
+                    $looksLikeData = true; 
+                    break;
+                }
+            }
+
+            if ($looksLikeData) {
+                 // CRITICAL: The user pushed a file WITHOUT headers (or we read the wrong line).
+                 // However, the user insists headers ARE present in Excel.
+                 // Maybe: The file has BOM that messed up the first line reading? 
+                 // Or line endings issue?
+                 // Current fix: We will throw a descriptive error.
+                 throw new Exception("The uploaded CSV appears to be missing headers (First row looks like data: " . json_encode(array_slice($headers, 0, 3)) . "). PLease ensure the first row contains column names like 'Owner Name', 'Owner ID', etc.");
+            }
+
             // Map CSV Headers to Staging DB Columns
             $targetColumns = [];
             $targetIndices = [];
             
             foreach ($headers as $idx => $csvCol) {
                 $rawHeader = trim($csvCol);
+                // Remove BOM from CSV header too
+                $rawHeader = str_replace("\xEF\xBB\xBF", '', $rawHeader); 
+                
                 if ($rawHeader === '') continue; // Skip empty headers
 
                 $cleanCsv = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($rawHeader));
@@ -97,10 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $targetColumns[] = $colMap[$cleanCsv];
                     $targetIndices[] = $idx;
                 } else {
-                    // If column doesn't match DB, we skip it or error? 
-                    // User preference: "intelligent mapping". 
-                    // If we try to insert into a column that doesn't exist, SQL fails.
-                    // So we only include matched columns.
+                    // Skip unmatched
                     continue; 
                 }
             }
@@ -108,9 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             
             if (empty($targetColumns)) {
                 // DEBUG: Show what we have
-                $debugDB = json_encode($realColumns);
+                $debugDB = json_encode(array_keys($colMap)); // Show cleaned DB keys
                 $debugCSV = json_encode($headers);
-                throw new Exception("No matching columns found. DB Cols: $debugDB. CSV Headers: $debugCSV");
+                throw new Exception("No matching columns found. DB Expected (Clean): $debugDB. CSV Details: $debugCSV");
             }
 
             // Re-identify Date Columns
