@@ -39,43 +39,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("File is empty or invalid CSV.");
             }
 
-            // 1. Fetch Real DB Columns (to handle BOMs mismatch)
-            // We query 1 row to get the EXACT column names from the DB
-            $metaStmt = $pdo->query("SELECT * FROM $tableName LIMIT 1");
+            // 0. Define Tables
+            $stagingTable = 'hive.sre.UFAA_23203159';
+            $prodTable    = 'iceberg.adhoc.ufaa_23203159';
+
+            // 1. CLEAR STAGING TABLE
+            // User requirement: "Replace" data in Hive first.
+            $pdo->query("DELETE FROM $stagingTable");
+
+            // 2. GET COLUMNS (from Staging Table to match CSV)
+            // We query 1 row from STAGING to get the EXACT column names (handling BOMs etc)
+            $metaStmt = $pdo->query("SELECT * FROM $stagingTable LIMIT 1");
             $metaRow = $metaStmt->fetch(PDO::FETCH_ASSOC);
             
             if (!$metaRow) {
-                // Table might be empty, so we can't auto-detect. 
-                // Fallback: Use hardcoded list we know from previous context, or fail gracefully.
-                // Known columns: ﻿owner_name, owner_dob, owner_id, transaction_date, transaction_time, owner_due_amount
-                // We'll try to proceed with CSV headers if empty, but usually we have data.
-                $realColumns = $headers; 
+                // Table might be empty (we just deleted it, or it was new).
+                // If empty, we can't auto-detect columns from data.
+                // WE MUST RELY ON CSV HEADERS matching DB columns if DB is empty.
+                // Or we can try DESCRIBE? Trino: SHOW COLUMNS FROM table
+                $colsStmt = $pdo->query("SHOW COLUMNS FROM $stagingTable"); // Better way to get cols if empty
+                $colsData = $colsStmt->fetchAll();
+                $realColumns = array_column($colsData, 'Column');
+                
+                if (empty($realColumns)) {
+                     // Fallback if SHOW COLUMNS fails (unlikely)
+                     $realColumns = $headers;
+                }
             } else {
                 $realColumns = array_keys($metaRow);
             }
 
             // Create Normalization Map: clean_name -> real_name
-            // e.g. "owner_name" -> "﻿owner_name"
             $colMap = [];
             foreach ($realColumns as $realCol) {
-                // Remove non-alphanumeric to get "clean" key
                 $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($realCol));
                 $colMap[$cleanKey] = $realCol;
             }
 
-            // 2. Process CSV Headers
-            // Note: We already read $headers at line 37. We should NOT read again, or we consume the first data row.
-            
-            // Map CSV Headers to Real DB Columns & Track Indices
-            $targetColumns = []; // The DB column names we will insert into
-            $targetIndices = []; // The CSV index corresponding to that column
+            // 3. Process CSV Headers
+            $headers = fgetcsv($handle);
+            if (!$headers) {
+                throw new Exception("File is empty or invalid CSV.");
+            }
+
+            // Map CSV Headers to Staging DB Columns
+            $targetColumns = [];
+            $targetIndices = [];
             
             foreach ($headers as $idx => $csvCol) {
                 $rawHeader = trim($csvCol);
-                if ($rawHeader === '') {
-                    // Skip empty headers (fixes "Zero-length delimited identifier" error)
-                    continue; 
-                }
+                if ($rawHeader === '') continue; // Skip empty headers
 
                 $cleanCsv = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($rawHeader));
                 
@@ -83,9 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $targetColumns[] = $colMap[$cleanCsv];
                     $targetIndices[] = $idx;
                 } else {
-                    // Fallback using the raw header if not found in DB map
-                    // (Ensure it's not empty, which we checked above)
-                    $targetColumns[] = $rawHeader;
+                    $targetColumns[] = $rawHeader; // Fallback
                     $targetIndices[] = $idx;
                 }
             }
@@ -94,11 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("No valid columns found in CSV.");
             }
 
-            // Re-identify Date Columns based on FINAL names
-            $dateColIndices = []; // Keyed by position in our NEW target list, or checking name?
-            // Actually, we check the name in $targetColumns.
-            // But we need to know when processing data...
-            // Let's just check the name inside the data loop or build a map: targetIndex => isDate
+            // Re-identify Date Columns
             $isDateCol = [];
             foreach ($targetColumns as $i => $colName) {
                 $lowerCol = strtolower($colName);
@@ -107,22 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 }
             }
 
-            // Use the FILTERED list for SQL
-            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns)); 
-            $valPlaceholders = implode(", ", array_fill(0, count($targetColumns), "?"));
-
-            // Performance Optimization: BULK INSERT
-            // Instead of executing 1 query per row (slow over HTTP), we group 500 rows into ONE query.
-            // INSERT INTO table (...) VALUES (r1), (r2), (r3)...
-            
-            $batchSize = 200; // 200 is safe for URL limits
+            // 4. UPLOAD CSV TO STAGING (Bulk Insert)
+            $batchSize = 200;
             $rowsBuffer = [];
             $columnListSQL = implode(", ", array_map(function($c) { return "\"$c\""; }, $targetColumns));
             
             $rowCount = 0;
 
             while (($data = fgetcsv($handle)) !== false) {
-                // Map Data
                 $rowValues = [];
                 foreach ($targetIndices as $i => $csvIdx) {
                     $val = isset($data[$csvIdx]) ? trim($data[$csvIdx]) : null;
@@ -133,36 +132,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          if (isset($isDateCol[$i])) {
                              $val = transformDate($val);
                          }
-                         
-                         // Trino Safe Quoting:
-                         $val = "'" . str_replace("'", "''", $val) . "'";
+                         $val = "'" . str_replace("'", "''", $val) . "'"; // Safe Quote
                     }
                     $rowValues[] = $val;
                 }
                 
-                // Add (v1, v2, v3) to buffer
                 $rowsBuffer[] = "(" . implode(", ", $rowValues) . ")";
                 $rowCount++;
 
-                // If Buffer Full, Execute
                 if (count($rowsBuffer) >= $batchSize) {
                     $valuesSQL = implode(", ", $rowsBuffer);
-                    $batchSQL = "INSERT INTO $tableName ($columnListSQL) VALUES $valuesSQL";
-                    $pdo->query($batchSQL); // Direct execute
-                    
-                    $rowsBuffer = []; // Reset
+                    $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
+                    $pdo->query($batchSQL);
+                    $rowsBuffer = [];
                 }
             }
             
-            // Flush remaining rows
+            // Flush remaining
             if (count($rowsBuffer) > 0) {
                 $valuesSQL = implode(", ", $rowsBuffer);
-                $batchSQL = "INSERT INTO $tableName ($columnListSQL) VALUES $valuesSQL";
+                $batchSQL = "INSERT INTO $stagingTable ($columnListSQL) VALUES $valuesSQL";
                 $pdo->query($batchSQL);
             }
 
-            // Commit (although Trino auto-commits usually, this is fine)
-            // No explicit transaction wrapping per batch needed for this generic client
+            // 5. PROMOTE TO ICEBERG (The magic step)
+            // SQL: INSERT INTO iceberg... SELECT * FROM hive...
+            $promoSQL = "INSERT INTO $prodTable SELECT * FROM $stagingTable";
+            $pdo->query($promoSQL);
 
             // Log success to registry
             $registry[] = $fileName;
@@ -170,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             fclose($handle);
 
-            $message = "Successfully uploaded $rowCount rows.";
+            $message = "Successfully uploaded $rowCount rows to Staging and promoted to Production.";
 
         } catch (Exception $e) {
             if ($pdo->inTransaction()) {
