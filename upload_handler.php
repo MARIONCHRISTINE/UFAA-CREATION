@@ -54,11 +54,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
             
             // 2. GET COLUMNS (from the New Staging Table - which matches Prod)
-            $metaStmt = $pdo->query("SHOW COLUMNS FROM $stagingTable");
-            $colsData = $metaStmt->fetchAll();
-            $realColumns = array_column($colsData, 'Column');
+            // SHOW COLUMNS is denied, but SELECT is allowed.
+            // We run a dummy query to get the column metadata from the Trino JSON response.
+            $metaStmt = $pdo->query("SELECT * FROM $stagingTable WHERE 1=0");
+            
+            // TrinoClient now supports getColumns() to retrieve headers even if no data
+            $realColumns = $metaStmt->getColumns();
             
             if (empty($realColumns)) {
+                 // Fallback: If for some reason 1=0 returns no column signature (unlikely in Trino),
+                 // we rely on the creation itself. The creation was 'AS SELECT * FROM Prod'.
+                 // Let's try to query Prod for headers if Staging fails?
+                 // But permissions might be same.
                  throw new Exception("Could not retrieve columns from generated staging table.");
             }
 

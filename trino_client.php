@@ -91,7 +91,7 @@ class TrinoClient {
                     if (!empty($columns)) {
                          $data[] = array_combine($columns, $row);
                     } else {
-                         return new TrinoStatement([]); // Error state?
+                         // Fallback?
                     }
                 }
             }
@@ -119,7 +119,7 @@ class TrinoClient {
             }
         }
 
-        return new TrinoStatement($data);
+        return new TrinoStatement($data, null, null, $columns);
     }
     
     public function prepare($sql) {
@@ -139,11 +139,17 @@ class TrinoStatement {
     private $pendingSql;
     private $boundParams = [];
     private $iterator = 0;
+    private $columns = [];
 
-    public function __construct($data, $client = null, $pendingSql = null) {
+    public function __construct($data, $client = null, $pendingSql = null, $columns = []) {
         $this->data = $data;
         $this->client = $client;
         $this->pendingSql = $pendingSql;
+        $this->columns = $columns;
+    }
+    
+    public function getColumns() { 
+        return $this->columns; 
     }
 
     // Compatibility: bindValue
@@ -215,6 +221,7 @@ class TrinoStatement {
             // Execute real query
             $resultStmt = $this->client->query($sql);
             $this->data = $resultStmt->fetchAll(); // Copy data from result statement to this statement
+            $this->columns = $resultStmt->getColumns(); // Copy columns
             $this->iterator = 0;
         }
         return true;
