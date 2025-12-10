@@ -28,10 +28,16 @@ try {
         }
     }
     
-    // 2. Owner ID
+    // 2. Owner ID (Bulk Search)
     if (!empty($f_id)) {
-            $sql .= " AND \"owner_id\" LIKE :id";
-            $params[':id'] = '%' . $f_id . '%';
+         $ids = preg_split('/[\s,\n\r]+/', $f_id, -1, PREG_SPLIT_NO_EMPTY);
+         if (count($ids) > 0) {
+             $cleanedIds = array_map(function($i) { return preg_quote(trim($i)); }, $ids);
+             $regexId = implode('|', $cleanedIds);
+             
+             $sql .= " AND REGEXP_LIKE(\"owner_id\", :id_regex)";
+             $params[':id_regex'] = $regexId;
+         }
     }
 
     // 3. DOB

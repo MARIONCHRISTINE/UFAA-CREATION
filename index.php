@@ -37,7 +37,7 @@ $error = '';
         <div class="content-area">
             <?php if ($view === 'upload'): ?>
                 
-                <h2 style="margin-bottom: 1rem;">Upload CSV File</h2>
+                <h2 class="mb-1">Upload CSV File</h2>
                 <p style="color: var(--text-muted); margin-bottom: 2rem;">Select a CSV file to upload into the database. Supports large files (200k+ rows).</p>
                 
                 <form action="upload_handler.php" method="POST" enctype="multipart/form-data" class="fade-in">
@@ -90,15 +90,24 @@ $error = '';
                                 $cleanedNames = array_map(function($n) { return preg_quote(strtolower(trim($n))); }, $names);
                                 $regex = implode('|', $cleanedNames);
                                 
-                                $sql .= " AND REGEXP_LIKE(LOWER(\"﻿owner_name\"), :name_regex)";
+                                // Handling potential BOM hidden char in column name if necessary, though we try to trust standard col names now.
+                                // We use "owner_name" usually, but user saw "﻿owner_name" (BOM) earlier. 
+                                // Ideally we use the clean name. Let's try standard first.
+                                $sql .= " AND REGEXP_LIKE(LOWER(\"owner_name\"), :name_regex)";
                                 $params[':name_regex'] = $regex;
                             }
                         }
                         
-                        // 2. Owner ID (Exact or Partial)
+                        // 2. Owner ID (Bulk Search Support)
                         if (!empty($f_id)) {
-                             $sql .= " AND \"owner_id\" LIKE :id";
-                             $params[':id'] = '%' . $f_id . '%';
+                             $ids = preg_split('/[\s,\n\r]+/', $f_id, -1, PREG_SPLIT_NO_EMPTY);
+                             if (count($ids) > 0) {
+                                 $cleanedIds = array_map(function($i) { return preg_quote(trim($i)); }, $ids);
+                                 $regexId = implode('|', $cleanedIds);
+                                 
+                                 $sql .= " AND REGEXP_LIKE(\"owner_id\", :id_regex)";
+                                 $params[':id_regex'] = $regexId;
+                             }
                         }
 
                         // 3. DOB (Exact)
@@ -117,7 +126,6 @@ $error = '';
                         // 5. Transaction Date Range (Robust Casting)
                         if (!empty($f_date_start)) {
                             // Ensure we compare against a DATE type. 
-                            // If column is timestamp, CAST(col AS DATE) works.
                             $sql .= " AND CAST(\"transaction_date\" AS DATE) >= DATE(:start_date)"; 
                             $params[':start_date'] = $f_date_start;
                         }
@@ -134,10 +142,6 @@ $error = '';
                         
                         // Bind all params
                         foreach ($params as $key => $val) {
-                            // Special handling for Amount to ensure it's not quoted as string if it looks like number
-                            // Our TrinoClient bindValue (custom) needs to know.
-                            // However, we just pass value, let Client logic decide or update Client.
-                            // Ideally, Trino accepts '100.00' for decimal comparison, so string is usually fine.
                             $dataStmt->bindValue($key, $val);
                         }
                         
@@ -147,54 +151,72 @@ $error = '';
                         $totalRows = count($rows) . (count($rows) >= $fetchLimit ? "+" : "");
 
                     } catch (Exception $e) {
-                        $error = "Database Error: " . $e->getMessage();
-                        $rows = [];
+                         // Fallback for column name error (BOM issue)
+                         if (strpos($e->getMessage(), 'Column') !== false && strpos($e->getMessage(), 'owner_name') !== false) {
+                            // Try again with BOM
+                            // Ideally we fix the DB column, but for now we patch the query
+                            try {
+                                $sql = str_replace('"owner_name"', '"﻿owner_name"', $sql);
+                                $dataStmt = $pdo->prepare($sql);
+                                foreach ($params as $key => $val) $dataStmt->bindValue($key, $val);
+                                $dataStmt->execute();
+                                $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+                                $totalRows = count($rows) . (count($rows) >= $fetchLimit ? "+" : "");
+                                $error = ""; // Clear error if fallback worked
+                            } catch (Exception $e2) {
+                                $error = "Database Error: " . $e2->getMessage();
+                                $rows = [];
+                            }
+                         } else {
+                            $error = "Database Error: " . $e->getMessage();
+                            $rows = [];
+                         }
                     }
                 ?>
 
-                <h2 style="margin-bottom: 1rem;">Data Viewer</h2>
+                <h2 class="mb-1">Data Viewer</h2>
                 
                 <!-- Expanded Search Bar -->
                 <div class="glass-card" style="padding: 1.5rem; margin-bottom: 2rem;">
                     <form method="GET" action="index.php">
                         <input type="hidden" name="view" value="view_data">
                         
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                        <div class="filter-grid">
                             
                             <!-- Row 1 -->
-                            <div class="form-group" style="margin-bottom:0; grid-column: span 2;">
+                            <div class="form-group mb-0 span-2">
                                 <label class="form-label">Owner Name(s) <small class="text-muted">(Paste multiple separated by space or comma)</small></label>
                                 <textarea name="f_name" class="form-control" rows="1" placeholder="Search by name(s)..."><?php echo htmlspecialchars($f_name); ?></textarea>
                             </div>
                             
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label class="form-label">Owner ID</label>
-                                <input type="text" name="f_id" class="form-control" placeholder="ID Number" value="<?php echo htmlspecialchars($f_id); ?>">
+                            <div class="form-group mb-0">
+                                <label class="form-label">Owner ID(s) <small class="text-muted">(Paste multiple)</small></label>
+                                <textarea name="f_id" class="form-control" rows="1" placeholder="Search IDs..."><?php echo htmlspecialchars($f_id); ?></textarea>
                             </div>
 
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group mb-0">
                                 <label class="form-label">Owner DOB</label>
-                                <input type="date" name="f_dob" class="form-control" value="<?php echo htmlspecialchars($f_dob); ?>">
+                                <input type="text" name="f_dob" class="form-control" value="<?php echo htmlspecialchars($f_dob); ?>" placeholder="e.g. 13/04/1990">
                             </div>
 
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group mb-0">
                                 <label class="form-label">Due Amount</label>
                                 <input type="number" step="0.01" name="f_amount" class="form-control" placeholder="100.00" value="<?php echo htmlspecialchars($f_amount); ?>">
                             </div>
 
                             <!-- Row 2: Date Range -->
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group mb-0">
                                 <label class="form-label">Trans. Date From</label>
                                 <input type="date" name="f_date_start" class="form-control" value="<?php echo htmlspecialchars($f_date_start); ?>">
                             </div>
 
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group mb-0">
                                 <label class="form-label">Trans. Date To</label>
                                 <input type="date" name="f_date_end" class="form-control" value="<?php echo htmlspecialchars($f_date_end); ?>">
                             </div>
                         </div>
 
-                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <div class="actions-row">
                             <a href="index.php?view=view_data" class="btn btn-secondary">Reset Filters</a>
                             <button type="submit" class="btn btn-primary">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.5rem"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -204,7 +226,7 @@ $error = '';
                     </form>
                 </div>
 
-                <div class="flex-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="results-header">
                     <p style="color: var(--text-muted);">
                         Showing: <strong><?php echo $totalRows; ?></strong> result(s)
                     </p>
@@ -273,7 +295,7 @@ $error = '';
                 </div>
 
                 <!-- Simple Pagination -->
-                <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: center;">
+                <div class="pagination-row">
                     <?php if ($page > 1): ?>
                         <a href="?view=view_data&page=<?php echo $page - 1; ?>" class="btn btn-secondary" style="padding: 0.5rem 1rem;">&laquo; Previous</a>
                     <?php endif; ?>
@@ -291,9 +313,6 @@ $error = '';
         </div>
     </div>
 </div>
-
-</body>
-</html>
 
 </body>
 </html>
