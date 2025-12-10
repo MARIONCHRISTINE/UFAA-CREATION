@@ -39,22 +39,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 throw new Exception("File is empty or invalid CSV.");
             }
 
-            // Headers: Just trim, do NOT regex remove characters (Preserve BOM for Trino)
-            // We assume CSV headers exactly match DB Column names now.
-            $columns = array_map('trim', $headers);
+            // 1. Fetch Real DB Columns (to handle BOMs mismatch)
+            // We query 1 row to get the EXACT column names from the DB
+            $metaStmt = $pdo->query("SELECT * FROM $tableName LIMIT 1");
+            $metaRow = $metaStmt->fetch(PDO::FETCH_ASSOC);
             
-            // identify Date Columns for processing (Specific to user request)
+            if (!$metaRow) {
+                // Table might be empty, so we can't auto-detect. 
+                // Fallback: Use hardcoded list we know from previous context, or fail gracefully.
+                // Known columns: ﻿owner_name, owner_dob, owner_id, transaction_date, transaction_time, owner_due_amount
+                // We'll try to proceed with CSV headers if empty, but usually we have data.
+                $realColumns = $headers; 
+            } else {
+                $realColumns = array_keys($metaRow);
+            }
+
+            // Create Normalization Map: clean_name -> real_name
+            // e.g. "owner_name" -> "﻿owner_name"
+            $colMap = [];
+            foreach ($realColumns as $realCol) {
+                // Remove non-alphanumeric to get "clean" key
+                $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower($realCol));
+                $colMap[$cleanKey] = $realCol;
+            }
+
+            // 2. Process CSV Headers
+            $headers = fgetcsv($handle);
+            if (!$headers) {
+                throw new Exception("File is empty or invalid CSV.");
+            }
+
+            // Map CSV Headers to Real DB Columns
+            $finalCols = [];
+            foreach ($headers as $csvCol) {
+                $cleanCsv = preg_replace('/[^a-zA-Z0-9_]/', '', strtolower(trim($csvCol)));
+                
+                if (isset($colMap[$cleanCsv])) {
+                    $finalCols[] = $colMap[$cleanCsv];
+                } else {
+                    // Column in CSV not found in DB? 
+                    // We can skip it or try to use it as is. 
+                    // Let's use as is (quoted) and hope, but likely will fail if strict.
+                    $finalCols[] = trim($csvCol);
+                }
+            }
+            
+            // Re-identify Date Columns based on FINAL names
             $dateColIndices = [];
-            foreach ($columns as $idx => $colName) {
+            foreach ($finalCols as $idx => $colName) {
                 $lowerCol = strtolower($colName);
-                // User specified: owner_dob and transaction_date
                 if (strpos($lowerCol, 'dob') !== false || strpos($lowerCol, 'transaction_date') !== false) {
                     $dateColIndices[] = $idx;
                 }
             }
 
-            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $columns)); // Quote columns for safe SQL
-            $valPlaceholders = implode(", ", array_fill(0, count($columns), "?"));
+            // Quote columns correctly
+            $colString = implode(", ", array_map(function($c) { return "\"$c\""; }, $finalCols)); 
+            $valPlaceholders = implode(", ", array_fill(0, count($finalCols), "?"));
 
             $sql = "INSERT INTO $tableName ($colString) VALUES ($valPlaceholders)";
             $stmt = $pdo->prepare($sql);
@@ -66,17 +107,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
             while (($data = fgetcsv($handle)) !== false) {
                 // Skip if row column count doesn't match header count
-                if (count($data) !== count($columns)) {
+                if (count($data) !== count($headers)) { // Compare against original header count
                     continue; 
                 }
+                
+                // If we mapped columns, we must ensure data aligns. 
+                // Assuming CSV order matches Header order, so index mapping is 1:1.
 
                 // Process Data (Transform Dates & Handle Blanks)
                 foreach ($data as $key => $val) {
                     $val = trim($val);
                     if ($val === '') {
-                        $data[$key] = null; // Send NULL for blanks, don't try to fill
+                        $data[$key] = null; 
                     } else {
-                        // Apply Date Transform only if it's a date column
                         if (in_array($key, $dateColIndices)) {
                             $data[$key] = transformDate($val);
                         }
