@@ -8,7 +8,7 @@ CREATE TABLE hive.sre.ufaadata2025 (
     transaction_date DATE,
     transaction_time VARCHAR(20),
     owner_due_amount DECIMAL(15, 2)
-);
+);   
 -- 1B. ICEBERG PRODUCTION TABLE (Data)
 CREATE TABLE iceberg.adhoc.ufaadata2025 (
     owner_code VARCHAR(20),
