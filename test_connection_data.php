@@ -3,9 +3,9 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-echo "<h1>Trino HTTP Connection Check (NEW TABLES)</h1>";
+echo "<h1>Trino HTTP Connection Check (2025 TABLES)</h1>";
 echo "<p>Test Type: <strong>CURL / HTTPS</strong> (Trino Protocol)</p>";
-echo "<p>Testing: <strong>hive.sre.UFAA_data</strong> → <strong>iceberg.adhoc.ufaa_data</strong></p>";
+echo "<p>Testing: <strong>hive.sre.ufaadata2025</strong> → <strong>iceberg.adhoc.ufaadata2025</strong></p>";
 
 try {
     require_once 'db_data.php';
@@ -22,8 +22,8 @@ try {
          echo "<div style='color: orange;'>⚠️ Connected but no data returned?</div>";
     }
 
-    // 2. Hive Table Check
-    $hiveTable = 'hive.sre.UFAA_data';
+    // 2. Hive Table Check 
+    $hiveTable = 'hive.sre.ufaadata2025';
     echo "<p>Checking Hive Table: <code>$hiveTable</code>...</p>";
     $stmt = $pdo->query("SELECT * FROM $hiveTable LIMIT 1");
     $data = $stmt->fetchAll();
@@ -36,7 +36,7 @@ try {
     }
 
     // 3. Iceberg Table Check
-    $icebergTable = 'iceberg.adhoc.ufaa_data';
+    $icebergTable = 'iceberg.adhoc.ufaadata2025';
     echo "<p>Checking Iceberg Table: <code>$icebergTable</code>...</p>";
     $stmt = $pdo->query("SELECT * FROM $icebergTable LIMIT 1");
     $data = $stmt->fetchAll();
