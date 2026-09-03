@@ -1,44 +1,65 @@
-TRANSFER_DATE	TRANSFER_ON	ACCOUNT_ID	CATEGORY_CODE	SERVICE_TYPE	AMOUNT	PRE_BAL	POST_BAL	PARTNER_DATA	TRANSACTION_TYPE	FIRST_NAME	LAST_NAME	PRIMARY_REGISTRATION	PRIMARY_DOB	PRIMARY_ID	FIRST_NAME_1	LAST_NAME_1	SECONDARY_REGISTRATION
-5/16/2026	16-MAY-26 10.29.00.369000000 AM	101010180	SUBS	P2PIOPOUT	3800	3854.71	4.71	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/7/2026	07-MAY-26 11.51.37.461000000 AM	101010180	SUBS	P2PIOPOUT	4100	4157.47	7.47	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/7/2026	07-MAY-26 01.35.55.835000000 PM	101010180	SUBS	P2PIOPOUT	850	890.1	29.1	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/11/2026	11-APR-26 08.35.55.130000000 AM	101010180	SUBS	IMTIN	3883	42.03	3925.03	{"channel":"DEVP","destinationAmount":"3,883","receiverCurrency":"KES","senderFirstName":"GRACE","senderLastName":"LATIS"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/11/2026	11-APR-26 08.44.52.853000000 PM	101010180	SUBS	IMTIN	7653	25.03	7678.03	{"channel":"DEVP","destinationAmount":"7,653","receiverCurrency":"KES","senderFirstName":"GRACE","senderLastName":"LATIS"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/5/2026	05-MAY-26 11.01.03.363000000 AM	101010180	SUBS	IMTIN	2886.64	4.03	2890.67	{"channel":"DEVP","destinationAmount":"2,886.64","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-4/27/2026	27-APR-26 06.11.31.927000000 PM	101010180	SUBS	IMTIN	2300	34.03	2334.03	{"channel":"DEVP","destinationAmount":"2,300","receiverCurrency":"KES","senderFirstName":"LOTUS","senderLastName":"ZIDVYO"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/15/2026	15-APR-26 08.45.30.298000000 AM	101010180	SUBS	IMTIN	3800	2.03	3802.03	{"channel":"DEVP","destinationAmount":"3,800","receiverCurrency":"KES","senderFirstName":"KARIS","senderLastName":"RISA"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/16/2026	16-MAY-26 10.24.56.887000000 AM	101010180	SUBS	IMTIN	3825	29.71	3854.71	{"channel":"DEVP","destinationAmount":"3,825","receiverCurrency":"KES","senderFirstName":"PETER","senderLastName":"KUMVI"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/12/2026	12-MAY-26 09.31.20.315000000 AM	101010180	SUBS	IMTIN	3773	29.1	3802.1	{"channel":"DEVP","destinationAmount":"3,773","receiverCurrency":"KES","senderFirstName":"HANZ","senderLastName":"MITA"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/12/2026	12-MAY-26 09.37.24.841000000 AM	101010180	SUBS	P2PIOPOUT	3700	3802.1	52.1	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/7/2026	07-MAY-26 11.48.23.213000000 AM	101010180	SUBS	IMTIN	4134.42	23.05	4157.47	{"channel":"DEVP","destinationAmount":"4,134.42","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-5/5/2026	05-MAY-26 02.16.14.573000000 PM	101010180	SUBS	IMTIN	3957.48	40.67	3998.15	{"channel":"DEVP","destinationAmount":"3,957.48","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-4/18/2026	18-APR-26 10.09.50.303000000 AM	101010180	SUBS	P2PIOPOUT	4650	4743.03	43.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/18/2026	18-APR-26 10.07.57.545000000 AM	101010180	SUBS	IMTIN	4636	107.03	4743.03	{"channel":"DEVP","destinationAmount":"4,636","receiverCurrency":"KES","senderFirstName":"MESH","senderLastName":"KADIRI"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/18/2026	18-APR-26 08.19.16.802000000 AM	101010180	SUBS	P2PIOPOUT	3600	3757.03	107.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/9/2026	09-APR-26 01.01.37.339000000 PM	101010180	SUBS	P2PIOPOUT	3700	3803.03	53.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/15/2026	15-APR-26 08.49.01.383000000 AM	101010180	SUBS	P2PIOPOUT	3750	3802.03	2.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/12/2026	12-MAY-26 11.27.03.768000000 AM	101010180	SUBS	IMTIN	6397.61	52.1	6449.71	{"channel":"DEVP","destinationAmount":"6,397.61","receiverCurrency":"KES","senderFirstName":"SATO","senderLastName":"MISH","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-5/6/2026	06-MAY-26 07.56.38.757000000 PM	101010180	SUBS	P2PIOPOUT	900	934.05	23.05	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/5/2026	05-MAY-26 02.17.53.964000000 PM	101010180	SUBS	P2PIOPOUT	3940	3998.15	8.15	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/27/2026	27-APR-26 06.13.03.179000000 PM	101010180	SUBS	P2PIOPOUT	2300	2334.03	4.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/25/2026	25-APR-26 08.31.27.880000000 AM	101010180	SUBS	P2PIOPOUT	3700	3803.03	53.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/9/2026	09-APR-26 04.42.25.338000000 PM	101010180	SUBS	P2PIOPOUT	2300	2372.03	42.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/9/2026	09-APR-26 04.33.52.047000000 PM	101010180	SUBS	IMTIN	2319	53.03	2372.03	{"channel":"DEVP","destinationAmount":"2,319","receiverCurrency":"KES","senderFirstName":"ROLLINS","senderLastName":"ROMAN"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/15/2026	15-MAY-26 02.00.27.891000000 PM	101010180	SUBS	P2PIOPOUT	50	79.71	29.71	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/12/2026	12-MAY-26 11.35.14.785000000 AM	101010180	SUBS	P2PIOPOUT	6300	6449.71	79.71	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/6/2026	06-MAY-26 04.58.32.912000000 PM	101010180	SUBS	P2PIOPOUT	40	47.42	7.42	{"subscriberMsisdn":"734567852","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-5/6/2026	06-MAY-26 07.53.23.610000000 PM	101010180	SUBS	IMTIN	926.63	7.42	934.05	{"channel":"DEVP","destinationAmount":"926.63","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-5/5/2026	05-MAY-26 11.02.16.108000000 AM	101010180	SUBS	P2PIOPOUT	2800	2890.67	40.67	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/25/2026	25-APR-26 10.05.59.101000000 AM	101010180	SUBS	IMTIN	5151	53.03	5204.03	{"channel":"DEVP","destinationAmount":"5,151","receiverCurrency":"KES","senderFirstName":"LOTUS","senderLastName":"ZIDVYO"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/25/2026	25-APR-26 08.29.02.187000000 AM	101010180	SUBS	IMTIN	3760	43.03	3803.03	{"channel":"DEVP","destinationAmount":"3,760","receiverCurrency":"KES","senderFirstName":"LOTUS","senderLastName":"ZIDVYO"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/18/2026	18-APR-26 08.17.24.059000000 AM	101010180	SUBS	IMTIN	3755	2.03	3757.03	{"channel":"DEVP","destinationAmount":"3,755","receiverCurrency":"KES","senderFirstName":"MESH","senderLastName":"KADIRI"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-4/13/2026	13-APR-26 09.32.45.075000000 AM	101010180	SUBS	P2PIOPOUT	500	608.03	102.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/11/2026	11-APR-26 08.49.19.559000000 PM	101010180	SUBS	P2PIOPOUT	7000	7678.03	608.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/9/2026	09-APR-26 12.53.29.797000000 PM	101010180	SUBS	IMTIN	3803	0.03	3803.03	{"channel":"DEVP","destinationAmount":"3,803","receiverCurrency":"KES","senderFirstName":"ROLLINS","senderLastName":"ROMAN"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	IMT	ThunesMNO	20-APR-09 11AM
-5/7/2026	07-MAY-26 01.33.55.033000000 PM	101010180	SUBS	IMTIN	882.63	7.47	890.1	{"channel":"DEVP","destinationAmount":"882.63","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-5/5/2026	05-MAY-26 06.52.44.661000000 PM	101010180	SUBS	IMTIN	3189.27	8.15	3197.42	{"channel":"DEVP","destinationAmount":"3,189.27","receiverCurrency":"KES","senderFirstName":"JOSE","senderLastName":"JOSE","sectorCode":"T9700"}	MR	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	TERRAPAY SERVICES	B2C	12-AUG-24 9PM
-5/5/2026	05-MAY-26 06.53.32.700000000 PM	101010180	SUBS	P2PIOPOUT	3100	3197.42	47.42	{"subscriberMsisdn":"254102378967","payAddress":"safaricom","channel":"leap"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/25/2026	25-APR-26 10.09.51.649000000 AM	101010180	SUBS	P2PIOPOUT	5100	5204.03	34.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/13/2026	13-APR-26 01.28.51.056000000 PM	101010180	SUBS	P2PIOPOUT	100	102.03	2.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-4/11/2026	11-APR-26 08.37.56.082000000 AM	101010180	SUBS	P2PIOPOUT	3850	3925.03	25.03	{"subscriberMsisdn":"102378967","payAddress":"safaricom","channel":"selfcare"}	MP	Bridget	Okello	06-JUN-24 10.12.48.000000000 AM	2/2/2007	87634756	Mpesa	Interops	04-JAN-12 5AM
-![Uploading image.png…]()
+AML-2026-00047
+CASE HEADER
+
+Case ID	AML-2026-00047
+Alert / Case Date	21 May 2026
+Analyst	Marion Oketcha
+Alert Source	IMT PARTNER - THUNES
+Priority	Medium 
+
+CUSTOMER PROFILE
+
+Full Name	AUGUSTINE SIPELI KHWATENGE
+MSISDN	731548784
+ID Type / Number	National ID – 42947193
+Registration Date	06-JUN-24
+Current Risk Rating	Medium
+Declared Occupation	Self-Employed
+KYC Status	Complete
+
+TRANSACTION SUMMARY (Review Period: 9 Apr ’26 –16 May ‘26)
+
+Total Credits	KES 71,032 (19 transactions)
+Total Debits	KES 70,130 (40 transactions)
+Primary Credit Source	Multiple incoming international remittances (IMTIN) via Thunes received on selected days during the review period, accounting for all credits totaling Kes. 71,032 across 19 transactions, with individual remittance values ranging from Kes. 882 to Kes. 7,653.
+Primary Debit Pattern	Rapid outgoing transfers within minutes of receipt of incoming international remittances (IMTIN) to Safaricom subscribers via interoperability, predominantly to Samson Khaemba (111307671), accounting for the total debits of Kes. 70,130 across 40 transactions during the review period. The transaction pattern resulted in the rapid utilization of incoming funds and minimal retention of balances within the account.
+Fraud Indicators	The sequence of credit from IMT, immediate utilization and then subsequent reversal request is consistent with known scam patterns where fraudulent actors exploit unsuspecting customers to access their funds fraudulently and use remittance channels to conduct layering. The reversals are usually late attempts by the defrauded persons to recover their funds, which in most cases are unsuccessful.
+
+DESCRIPTION
+
+
+On 16-MAY-26 at 10:24AM, AUGUSTINE received an amount of Kes 3,825 via IMT Thunes MNO, bringing her balance to Kes 3,855 with details as shown below:
+-	Kes 3,825 - (Transaction ID - 21618340123) - IMT incoming transaction from DAVID MAKUNDI of MSISDN + 255747382170 via IMT THUNES MNO.;
+A few minutes later, at 10:29AM, AUGUSTINE sent an amount of Kes 3,800 to a Safaricom user with details shown below:
+-	Kes 3,800 - (Transaction ID - 21618347728) - Sent to Samson Khaemba of MSISDN 111307671 via MPESA.
+The two transactions left his balance at Kes 4.71 only.
+The two transactions on the day left his balance at Kes 0.
+
+On that same day, a reversal request was initiated by DAVID MAKUNDI, for the transaction from IMT, which failed since the funds had already been utilized.
+
+BASIS OF SUSPICION
+
+1.	Possible social engineering or fraud scheme - The sequence of credit from IMT, immediate utilization and then subsequent reversal request is consistent with known scam patterns where fraudulent actors exploit unsuspecting customers to access their funds fraudulently and use remittance channels to conduct layering. The failed merchant reversals are usually late attempts by the defrauded persons to recover their funds, which in most cases are unsuccessful.
+2.	Use of funds not belonging to beneficiary – Samson utilized or withdrew the funds received even though the money did not belong to him.
+3.	Rapid utilization of funds – Samson withdrew or spent the funds almost immediately after receiving them, possibly to frustrate recovery efforts or avoid traceability common in fraudulent or layering activities.
+
+
+ANALYSIS & FINDINGS
+
+The review identified a recurring pattern whereby the account received multiple incoming international remittances (IMTIN) via Thunes on selected days during the review period, accounting for all credits totaling Kes. 71,032 across 19 transactions, with individual remittance values ranging from Kes. 882 to Kes. 7,653.
+
+Following receipt of the remittances, the account exhibited a pattern of rapid outgoing transfers within minutes of credit receipt to Safaricom subscribers via interoperability, predominantly to Samson Khaemba (111307671), accounting for Kes. 70,130 across 40 transactions, representing substantially all debit activity on the account during the review period.
+
+The rapid movement of funds shortly after receipt of international remittances, the concentration of outgoing transfers to a recurring beneficiary, and the minimal retention of balances within the account are indicative of potential pass-through account activity. The transaction pattern warrants further review to establish the economic rationale and legitimacy of the transactions.
+MLRO RECOMMENDATION
+
+RECOMMENDATION
+1.	File Suspicious Transaction Report (STR) to the Financial Reporting Centre (FRC).
+2.	Escalate account for enhanced monitoring. 
+3.	Refer the related recipient wallets for parallel investigation. 
+4.	Update customer risk rating to High.
+
+Justification: 
+The circumstances surrounding the transaction above suggest possible fraudulent inducement or potential misuse of the customer’s account to receive and quickly utilize disputed funds. Reporting is required under POCAMLA obligations.
+
+
